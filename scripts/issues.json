@@ -1,0 +1,177 @@
+[
+  {
+    "title": "Configurar docker-compose con FIWARE",
+    "body": "Crear `docker-compose.yml` con Orion-LD, Mosquitto, IoT Agent JSON, QuantumLeap, CrateDB, Grafana, backend y frontend. Incluir healthchecks, volúmenes y `start.sh`. Documentar puertos y acceso en README.",
+    "labels": ["infra","epic"]
+  },
+  {
+    "title": "Estructura backend Flask y clientes Orion/QuantumLeap",
+    "body": "Inicializar proyecto Flask con `requirements.txt`, crear `orion_client.py`, `quantumleap_client.py`, `mqtt_client.py` y endpoint `/health`. Añadir estructura de carpetas `/backend`.",
+    "labels": ["backend","epic"]
+  },
+  {
+    "title": "Esqueleto Frontend (Leaflet + Three.js)",
+    "body": "Crear `index.html`, `js/map.js`, `js/scene3d.js`, `js/api-client.js` y `css/styles.css`. Layout básico 2D/3D, centrar en A Coruña.",
+    "labels": ["frontend","epic"]
+  },
+  {
+    "title": "Implementar load_gtfs.py: parser GTFS → NGSI-LD",
+    "body": "Script Python para parsear ZIP GTFS y transformar filas a entidades NGSI-LD; batch POST a Orion-LD. Logging de entidades creadas y errores.",
+    "labels": ["data","backend"]
+  },
+  {
+    "title": "Validadores GTFS y tests del modelo de datos",
+    "body": "Crear `validate_gtfs.py` para verificar esquema GTFS, unicidad de IDs y geometrías. Añadir tests unitarios para entidades NGSI-LD.",
+    "labels": ["tests","data"]
+  },
+  {
+    "title": "Endpoints GET /api/routes, /api/stops, /api/trips",
+    "body": "Implementar endpoints en Flask que consulten Orion-LD y devuelvan datos paginados listos para el frontend.",
+    "labels": ["api","backend"]
+  },
+  {
+    "title": "dynamic_simulator.py: simulador de vehículos MQTT",
+    "body": "Simulador que interpola posición sobre shapes, calcula retraso/ocupación/velocidad y publica JSON en `vehicle/{id}/telemetry` cada 3s. CLI args `--speed-factor` y `--date`.",
+    "labels": ["simulator","backend"]
+  },
+  {
+    "title": "Configurar IoT Agent JSON: mapeo MQTT → VehicleState",
+    "body": "Configurar IoT Agent JSON para traducir mensajes MQTT a atributos NGSI-LD `VehicleState` y asegurarse de actualizaciones correctas en Orion-LD.",
+    "labels": ["infra","integration"]
+  },
+  {
+    "title": "Suscripción Orion-LD → QuantumLeap para persistencia histórica",
+    "body": "Crear subscription en Orion-LD para cambios de `VehicleState` y notificar a QuantumLeap; verificar datos en CrateDB.",
+    "labels": ["infra","data"]
+  },
+  {
+    "title": "Renderizar rutas, paradas y vehículos en Leaflet",
+    "body": "Frontend: polylines para shapes, markers para paradas, markers animados para vehículos con popups de info.",
+    "labels": ["frontend","ui"]
+  },
+  {
+    "title": "Polling /api/vehicles/current cada 2s y actualización suave",
+    "body": "Implementar polling desde frontend a `/api/vehicles/current` y actualizar posiciones con interpolación para animación suave.",
+    "labels": ["frontend","api"]
+  },
+  {
+    "title": "Panel lateral detalle vehículo/parada",
+    "body": "Panel UI que muestra tripId, próximas paradas, ETA, delay, ocupación y botón para predecir ocupación.",
+    "labels": ["frontend","ui"]
+  },
+  {
+    "title": "Endpoint /api/vehicles/history para consultas históricas",
+    "body": "Implementar endpoint que consulte QuantumLeap para rangos temporales, agrupe por vehicleId y devuelva JSON paginado.",
+    "labels": ["api","data"]
+  },
+  {
+    "title": "Timeline & replay: slider fecha/hora y reproducción histórica",
+    "body": "UI timeline con slider fecha/hora, botones play/pause/step y reconstrucción de la escena a partir de histórico.",
+    "labels": ["frontend","feature"]
+  },
+  {
+    "title": "Tests de consistencia histórica (gaps y coherencia)",
+    "body": "Tests de integración que detecten gaps en histórico, coherencia de posiciones y consistencia entre Orion, QuantumLeap y CrateDB.",
+    "labels": ["tests","data"]
+  },
+  {
+    "title": "generate_ml_dataset.py: generar dataset de ocupancia",
+    "body": "Script que extraiga histórico de CrateDB y genere features (route, stop, day, hour, prev_occupancy) para entrenamiento ML.",
+    "labels": ["ml","data"]
+  },
+  {
+    "title": "train_model.py: entrenar RandomForest y guardar modelo",
+    "body": "Entrenar RandomForest, GridSearch opcional, guardar `models/occupancy_model.pkl` y exportar feature importances.",
+    "labels": ["ml","backend"]
+  },
+  {
+    "title": "Endpoint /api/predict: predicción de ocupancia",
+    "body": "Cargar modelo, generar features para un stop/hora y devolver `predictedOccupancy`, `confidence`. Cache TTL 15min.",
+    "labels": ["api","ml"]
+  },
+  {
+    "title": "Mostrar predicción en UI: popup parada con % y gráfico",
+    "body": "Mostrar predicción breve en popup de parada y gráfico lineal de próximas 2 horas usando Chart.js.",
+    "labels": ["frontend","ml"]
+  },
+  {
+    "title": "Escena base Three.js: terreno, edificios y cámara",
+    "body": "Inicializar Three.js con plano texturado, edificios simple LOD y cámara orbitable; mantener performance.",
+    "labels": ["frontend","3d"]
+  },
+  {
+    "title": "Vehículos 3D animados coloreados por ruta",
+    "body": "Representar vehículos como meshes coloreados por routeColor, interpolación entre updates y rotación por heading.",
+    "labels": ["frontend","3d"]
+  },
+  {
+    "title": "Sincronización 2D ↔ 3D: VehicleManager compartido",
+    "body": "Crear módulo `VehicleManager` que centralice estado y sea consumido por `map.js` y `scene3d.js`.",
+    "labels": ["frontend","integration"]
+  },
+  {
+    "title": "Interacción 3D: raycast click/hover en vehículos/paradas",
+    "body": "Detectar clicks en 3D para mostrar el mismo panel lateral que en 2D; hover highlight.",
+    "labels": ["frontend","3d"]
+  },
+  {
+    "title": "Modelos UserProfile y RedeemedDiscount en Orion-LD",
+    "body": "Definir esquemas NGSI-LD para `UserProfile` y `RedeemedDiscount` y script `seed_gamification.py` para generar usuarios ficticios.",
+    "labels": ["backend","feature"]
+  },
+  {
+    "title": "Endpoints gamificación: profile, record-trip, redeem",
+    "body": "Implementar `GET /api/user/{id}/profile`, `POST /api/user/record-trip`, `POST /api/user/redeem` con validación básica.",
+    "labels": ["api","feature"]
+  },
+  {
+    "title": "UI gamificación: perfil, logros y canjes",
+    "body": "Panel frontend para mostrar puntos, logros y permitir canje; animaciones para logros.",
+    "labels": ["frontend","feature"]
+  },
+  {
+    "title": "Autenticación mock: JWT para desarrollo",
+    "body": "Implementar login simple que emita JWT guardado en localStorage; backend valida JWT en endpoints de usuario.",
+    "labels": ["backend","infra"]
+  },
+  {
+    "title": "Configurar Grafana con CrateDB",
+    "body": "Provisionar datasource CrateDB en Grafana y asegurar conexión; guardar provisioning YAML en repo.",
+    "labels": ["infra","monitoring"]
+  },
+  {
+    "title": "Crear dashboards Grafana: retrasos, ocupación, volumen",
+    "body": "Dashboards operativos para retrasos por línea, ocupación por parada y volumen de viajes por hora; auto-refresh 30s.",
+    "labels": ["monitoring","dashboard"]
+  },
+  {
+    "title": "Healthchecks y logging: endpoint /health",
+    "body": "Implementar `/health` que verifique Orion, QuantumLeap y CrateDB; logs estructurados y alertas básicas.",
+    "labels": ["backend","infra"]
+  },
+  {
+    "title": "README: quick start, arquitectura y scripts",
+    "body": "Documentación completa con quick start (`docker-compose up`), diagrama arquitectura, API examples y scripts de datos.",
+    "labels": ["docs"]
+  },
+  {
+    "title": "Tests unitarios e integración (pytest)",
+    "body": "Suite de tests unitarios e integración (Orion-QL-CrateDB). `make test` para ejecutar.",
+    "labels": ["tests"]
+  },
+  {
+    "title": "Validación E2E y checklist de aceptación",
+    "body": "Checklist E2E que valida levantado del stack, funcionalidades MVP y criterios de performance y reproducibilidad.",
+    "labels": ["qa"]
+  },
+  {
+    "title": "Responsividad móvil y touch gestures",
+    "body": "Ajustes CSS y touch gestures para 3D/2D en mobile; layout single-column y tabs.",
+    "labels": ["frontend","mobile"]
+  },
+  {
+    "title": "Optimización rendimiento: lazy-load, cache y minify",
+    "body": "Implementar lazy-load de shapes, caché de predicciones (Redis opcional), compresión gzip y minificación frontend.",
+    "labels": ["performance"]
+  }
+]

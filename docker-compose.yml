@@ -1,0 +1,100 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    ports:
+      - "1883:1883"
+    volumes:
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+
+  orion-ld:
+    image: fiware/orion-ld:3.0.0
+    environment:
+      - CONTEXT_BROKER_HOST=0.0.0.0
+    ports:
+      - "1026:1026"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:1026/ngsi-ld/v1/entities"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  iot-agent-json:
+    image: fiware/iot-agent-json:1.16.0
+    environment:
+      - IOTA_MQTT_HOST=mosquitto
+    ports:
+      - "4041:4041"
+    depends_on:
+      - orion-ld
+      - mosquitto
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4041/iot/about"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  crate:
+    image: crate:4.6.3
+    ports:
+      - "4200:4200"
+    volumes:
+      - crate_data:/var/lib/crate
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4200/_cluster/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  grafana:
+    image: grafana/grafana:9.4.7
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    image: xdei/backend:stub
+    ports:
+      - "8000:8000"
+    depends_on:
+      - orion-ld
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  quantumleap:
+    image: smartsdk/quantumleap:1.7.0
+    environment:
+      - CRATE_HOST=crate
+      - CRATE_PORT=4200
+    ports:
+      - "8668:8668"
+    depends_on:
+      - crate
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8668/version"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  frontend:
+    build: ./frontend
+    image: xdei/frontend:stub
+    ports:
+      - "8080:80"
+
+volumes:
+  crate_data:
+  grafana_data:
+  mosquitto_data:
+  mosquitto_log:
+  gtfs_feed:
