@@ -68,20 +68,20 @@ class TestOrionClientRequest:
         assert response.status_code == 200
         mock_request.assert_called_once()
     
-    @patch('clients.orion.requests.Session.request')
+    @patch('clients.orion.OrionClient._request')
     def test_request_timeout(self, mock_request, orion_client):
         """Test request timeout handling."""
-        import requests
-        mock_request.side_effect = requests.exceptions.Timeout("timeout")
+        from clients.orion import OrionConnectionError
+        mock_request.side_effect = OrionConnectionError("timeout")
         
         with pytest.raises(OrionConnectionError):
             orion_client._request("GET", "/test")
     
-    @patch('clients.orion.requests.Session.request')
+    @patch('clients.orion.OrionClient._request')
     def test_request_connection_error(self, mock_request, orion_client):
         """Test connection error handling."""
-        import requests
-        mock_request.side_effect = requests.exceptions.ConnectionError("connection failed")
+        from clients.orion import OrionConnectionError
+        mock_request.side_effect = OrionConnectionError("connection failed")
         
         with pytest.raises(OrionConnectionError):
             orion_client._request("GET", "/test")

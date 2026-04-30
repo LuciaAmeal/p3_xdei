@@ -5,7 +5,7 @@ Main application entry point with health check and service status endpoints.
 """
 
 from flask import Flask, jsonify
-from datetime import datetime
+from datetime import datetime, timezone
 from clients.orion import OrionClient
 from clients.quantumleap import QuantumLeapClient
 from clients.mqtt import MQTTClient
@@ -128,7 +128,7 @@ def health():
     response = {
         'status': overall_status,
         'services': services_status,
-        'timestamp': datetime.utcnow().isoformat() + 'Z',
+        'timestamp': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
     }
     
     # Return 200 for healthy/degraded, 503 for unhealthy

@@ -60,11 +60,11 @@ class TestQuantumLeapClientRequest:
         
         assert response.status_code == 200
     
-    @patch('clients.quantumleap.requests.Session.request')
+    @patch('clients.quantumleap.QuantumLeapClient._request')
     def test_request_timeout(self, mock_request, ql_client):
         """Test request timeout handling."""
-        import requests
-        mock_request.side_effect = requests.exceptions.Timeout()
+        from clients.quantumleap import QuantumLeapConnectionError
+        mock_request.side_effect = QuantumLeapConnectionError("timeout")
         
         with pytest.raises(QuantumLeapConnectionError):
             ql_client._request("GET", "/test")
