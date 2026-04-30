@@ -1,0 +1,16 @@
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+#map {
+  width: 100%;
+  height: 100vh;
+  position: relative;
+}
+
+/* Ensure Three.js canvas sits on top of tiles but doesn't capture pointer events */
+#map canvas {
+  pointer-events: none;
+}

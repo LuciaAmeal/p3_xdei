@@ -3,10 +3,20 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>XDEI P3 - Frontend Stub</title>
+    <title>XDEI P3 - Frontend</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="static/css/map.css" />
   </head>
   <body>
-    <h1>Frontend placeholder</h1>
-    <p>Mapa y UI vendrán en próximas iteraciones.</p>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+    <script src="static/js/map.js"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        if (typeof initMap === 'function') initMap();
+      });
+    </script>
   </body>
 </html>
