@@ -90,7 +90,7 @@ services:
     build: ./frontend
     image: xdei/frontend:stub
     ports:
-      - "8080:80"
+      - "8081:80"
 
 volumes:
   crate_data:
