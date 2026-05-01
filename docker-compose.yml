@@ -22,7 +22,15 @@ services:
   iot-agent-json:
     image: fiware/iot-agent-json:1.16.0
     environment:
+      - IOTA_CB_HOST=orion-ld
+      - IOTA_CB_PORT=1026
+      - IOTA_NORTH_PORT=4041
+      - IOTA_REGISTRY_TYPE=memory
       - IOTA_MQTT_HOST=mosquitto
+      - IOTA_MQTT_PORT=1883
+      - IOTA_DEFAULT_KEY=1234
+      - IOTA_DEFAULT_TRANSPORT=MQTT
+      - IOTA_PROVIDER_URL=http://iot-agent-json:4041
     ports:
       - "4041:4041"
     depends_on:
@@ -70,6 +78,24 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  vehicle-bridge:
+    build: ./backend
+    image: xdei/backend:stub
+    command: ["python", "vehicle_bridge.py"]
+    environment:
+      - MQTT_HOST=mosquitto
+      - MQTT_PORT=1883
+      - ORION_HOST=orion-ld
+      - ORION_PORT=1026
+      - IOTA_AGENT_URL=http://iot-agent-json:4041
+      - BRIDGE_DEFAULT_KEY=1234
+      - FIWARE_SERVICE=smartgondor
+      - FIWARE_SERVICEPATH=/gardens
+    depends_on:
+      - mosquitto
+      - orion-ld
+      - iot-agent-json
 
   quantumleap:
     image: smartsdk/quantumleap:1.7.0
