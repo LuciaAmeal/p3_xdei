@@ -185,6 +185,25 @@ class TestMQTTClientCallbacks:
         
         assert callback_called["called"] is True
         assert callback_called["args"] == ("test/topic", "test payload")
+
+    def test_on_message_matches_wildcard_subscription(self, mqtt_client):
+        """Test that wildcard subscriptions receive matching topics."""
+        callback_called = {"called": False, "args": None}
+
+        def test_callback(topic, payload):
+            callback_called["called"] = True
+            callback_called["args"] = (topic, payload)
+
+        mqtt_client._callbacks["vehicle/+/telemetry"] = test_callback
+
+        mock_msg = Mock()
+        mock_msg.topic = "vehicle/bus-7/telemetry"
+        mock_msg.payload = b'{"speed": 10}'
+
+        mqtt_client._on_message(None, None, mock_msg)
+
+        assert callback_called["called"] is True
+        assert callback_called["args"] == ("vehicle/bus-7/telemetry", '{"speed": 10}')
     
     def test_on_connect_success(self, mqtt_client):
         """Test on_connect callback with success."""

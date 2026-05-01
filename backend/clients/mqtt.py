@@ -98,12 +98,13 @@ class MQTTClient:
         
         logger.debug(f"Received MQTT message on {topic}")
         
-        # Execute registered callback for this topic if exists
-        if topic in self._callbacks:
-            try:
-                self._callbacks[topic](topic, payload)
-            except Exception as e:
-                logger.error(f"Error in MQTT message callback for {topic}: {e}")
+        # Execute any callback whose subscription filter matches the topic.
+        for topic_filter, callback in self._callbacks.items():
+            if topic_filter == topic or mqtt.topic_matches_sub(topic_filter, topic):
+                try:
+                    callback(topic, payload)
+                except Exception as e:
+                    logger.error(f"Error in MQTT message callback for {topic_filter}: {e}")
     
     def _on_publish(self, client, userdata, mid):
         """Callback for when message is published."""
@@ -231,7 +232,7 @@ class MQTTClient:
             if result[0] != mqtt.MQTT_ERR_SUCCESS:
                 raise MQTTClientError(f"Subscribe failed with code {result[0]}")
             
-            # Store callback for this topic
+            # Store callback for this topic or subscription filter.
             self._callbacks[topic] = callback
             
             logger.info(f"Subscribed to {topic}")
