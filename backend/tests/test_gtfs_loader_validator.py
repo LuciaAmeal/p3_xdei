@@ -2,16 +2,24 @@
 Tests for GTFS loader and validator.
 """
 
+# flake8: noqa
+
 from __future__ import annotations
 
-import io
 import zipfile
 from pathlib import Path
 
-import pytest
-
-from load_gtfs import GTFSValidationError, build_entities, load_gtfs, read_gtfs_feed, validate_feed
-from validate_gtfs import validate_extended_gtfs, validate_gtfs, validate_ngsi_ld_structure
+from load_gtfs import (
+    build_entities,
+    load_gtfs,
+    read_gtfs_feed,
+    validate_feed,
+)
+from validate_gtfs import (
+    validate_extended_gtfs,
+    validate_gtfs,
+    validate_ngsi_ld_structure,
+)
 
 
 ROUTES_CSV = """route_id,agency_id,route_short_name,route_long_name,route_desc,route_type,route_color,route_text_color
@@ -27,10 +35,11 @@ TRIPS_CSV = """route_id,service_id,trip_id,trip_headsign,trip_short_name,directi
 r1,wd,t1,Campus,10A,0,b1,shape1
 """
 
-STOP_TIMES_CSV = """trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
-t1,08:00:00,08:00:00,s1,1,0,0
-t1,08:05:00,08:05:00,s2,2,0,0
-"""
+STOP_TIMES_CSV = "\n".join([
+    "trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type",
+    "t1,08:00:00,08:00:00,s1,1,0,0",
+    "t1,08:05:00,08:05:00,s2,2,0,0",
+])
 
 CALENDAR_CSV = """service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date
 wd,1,1,1,1,1,0,0,20260101,20261231
@@ -198,6 +207,20 @@ shape_bad,43.3629,-8.4101,2,0.8
 
         assert any("out-of-range" in error for error in errors), (
             f"Expected out-of-range coordinates error, got: {errors}"
+        )
+
+    def test_detects_invalid_time_format(self, tmp_path):
+        """Validator should detect malformed time strings (missing seconds)."""
+        bad_stop_times = """trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
+t1,08:00,08:00,s1,1,0,0
+t1,08:05:00,08:05:00,s2,2,0,0
+"""
+        archive_path = make_gtfs_zip(tmp_path, stop_times=bad_stop_times)
+        feed = read_gtfs_feed(archive_path)
+        errors = validate_extended_gtfs(feed)
+
+        assert any("Invalid time format" in error or "non-chronological" in error for error in errors), (
+            f"Expected invalid time format or chronological error, got: {errors}"
         )
 
 

@@ -5,6 +5,7 @@ Provides a standalone CLI for checking GTFS ZIP structure and integrity before
 running the loader. Includes validation for GTFS schema, data referential integrity,
 geometry validation, and NGSI-LD entity structure conformance.
 """
+# flake8: noqa
 
 from __future__ import annotations
 
@@ -93,16 +94,30 @@ def _validate_stop_time_sequence(feed: GTFSFeed) -> List[str]:
             
             curr_departure = _optional_value(curr_row, "departure_time")
             next_arrival = _optional_value(next_row, "arrival_time")
-            
+            # Validate time format before comparing
+            seq_curr = _optional_value(curr_row, "stop_sequence")
+            seq_next = _optional_value(next_row, "stop_sequence")
+
+            if not _validate_time_format(curr_departure, f"trip {trip_id} seq {seq_curr}"):
+                errors.append(
+                    f"Invalid time format '{curr_departure}' in stop_times.txt trip_id '{trip_id}' stop_sequence '{seq_curr}'"
+                )
+                continue
+
+            if not _validate_time_format(next_arrival, f"trip {trip_id} seq {seq_next}"):
+                errors.append(
+                    f"Invalid time format '{next_arrival}' in stop_times.txt trip_id '{trip_id}' stop_sequence '{seq_next}'"
+                )
+                continue
+
             curr_seconds = _parse_time_to_seconds(curr_departure)
             next_seconds = _parse_time_to_seconds(next_arrival)
-            
+
             if curr_seconds is not None and next_seconds is not None:
                 if curr_seconds > next_seconds:
                     errors.append(
                         f"stop_times.txt trip_id '{trip_id}' has non-chronological stops: "
-                        f"departure at sequence {_optional_value(curr_row, 'stop_sequence')} "
-                        f"({curr_departure}) > arrival at next sequence ({next_arrival})"
+                        f"departure at sequence {seq_curr} ({curr_departure}) > arrival at next sequence ({next_arrival})"
                     )
     
     return errors
@@ -112,7 +127,7 @@ def _validate_shapes_geometry(feed: GTFSFeed) -> List[str]:
     """Validate shapes have valid geometry (minimum 2 points for LineString)."""
     errors: List[str] = []
     
-    from load_gtfs import _optional_value, _optional_float, _optional_int
+    from load_gtfs import _optional_value, _optional_float
     from collections import defaultdict
     
     shapes_by_id: Dict[str, List[Dict[str, str]]] = defaultdict(list)
@@ -165,10 +180,23 @@ def _validate_arrival_departure_times(feed: GTFSFeed) -> List[str]:
         
         if not arrival_str or not departure_str:
             continue
-        
+
+        # Ensure times are correctly formatted
+        if not _validate_time_format(arrival_str, f"trip {trip_id} stop {stop_id} seq {stop_seq}"):
+            errors.append(
+                f"Invalid time format '{arrival_str}' in stop_times.txt trip_id '{trip_id}' stop_sequence '{stop_seq}'"
+            )
+            continue
+
+        if not _validate_time_format(departure_str, f"trip {trip_id} stop {stop_id} seq {stop_seq}"):
+            errors.append(
+                f"Invalid time format '{departure_str}' in stop_times.txt trip_id '{trip_id}' stop_sequence '{stop_seq}'"
+            )
+            continue
+
         arrival_seconds = _parse_time_to_seconds(arrival_str)
         departure_seconds = _parse_time_to_seconds(departure_str)
-        
+
         if arrival_seconds is not None and departure_seconds is not None:
             if arrival_seconds > departure_seconds:
                 errors.append(
