@@ -70,6 +70,13 @@ class AppConfig:
     flask_env: str
 
 
+@dataclass
+class SimulatorConfig:
+    """Simulator configuration."""
+    publish_interval_seconds: int
+    default_speed_factor: float
+
+
 class Settings:
     """Central settings manager."""
     
@@ -117,6 +124,12 @@ class Settings:
             flask_port=int(os.getenv("FLASK_PORT", "8000")),
             flask_env=os.getenv("FLASK_ENV", "development"),
         )
+
+        # Simulator defaults
+        self.simulator = SimulatorConfig(
+            publish_interval_seconds=int(os.getenv("SIMULATOR_INTERVAL", "3")),
+            default_speed_factor=float(os.getenv("SIMULATOR_SPEED_FACTOR", "1.0")),
+        )
     
     def get_fiware_headers(self) -> dict:
         """Get standard FIWARE headers for API requests."""
@@ -128,3 +141,4 @@ class Settings:
 
 # Global settings instance
 settings = Settings()
+
