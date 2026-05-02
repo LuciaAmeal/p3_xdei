@@ -2,6 +2,7 @@ html, body {
   height: 100%;
   margin: 0;
   padding: 0;
+  background: linear-gradient(180deg, #0b1220 0%, #101a2d 45%, #18253d 100%);
 }
 
 #map {
@@ -10,7 +11,128 @@ html, body {
   position: relative;
 }
 
-/* Ensure Three.js canvas sits on top of tiles but doesn't capture pointer events */
-#map canvas {
+#hud {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  z-index: 1000;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
   pointer-events: none;
+}
+
+.hud-pill,
+.hud-legend {
+  backdrop-filter: blur(18px);
+  background: rgba(11, 18, 32, 0.78);
+  color: #f5f7fb;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.2);
+}
+
+.hud-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 999px;
+  font: 600 0.92rem/1.2 system-ui, sans-serif;
+  letter-spacing: 0.02em;
+}
+
+.hud-legend {
+  display: inline-flex;
+  gap: 14px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  font: 500 0.86rem/1.2 system-ui, sans-serif;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.hud-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.legend-route {
+  background: #4ea1ff;
+}
+
+.legend-stop {
+  background: #1fc58e;
+}
+
+.legend-vehicle {
+  background: #ffb020;
+}
+
+.map-marker {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.28);
+}
+
+.map-marker--stop {
+  background: linear-gradient(180deg, #19c98d 0%, #0f9f6d 100%);
+}
+
+.map-marker--vehicle {
+  background: linear-gradient(180deg, #ffcf5a 0%, #ff9f1c 100%);
+  transform: scale(1.15);
+}
+
+.map-marker-label {
+  display: block;
+  position: absolute;
+  left: 50%;
+  top: 24px;
+  transform: translateX(-50%);
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(11, 18, 32, 0.92);
+  color: #f5f7fb;
+  white-space: nowrap;
+  font: 600 0.72rem/1.1 system-ui, sans-serif;
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: rgba(9, 15, 26, 0.96);
+  color: #f5f7fb;
+}
+
+.leaflet-popup-content {
+  margin: 12px 14px;
+  font: 500 0.92rem/1.4 system-ui, sans-serif;
+}
+
+.popup-title {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.popup-meta {
+  color: rgba(245, 247, 251, 0.82);
+}
+
+.popup-list {
+  margin: 8px 0 0;
+  padding-left: 16px;
+}
+
+.popup-list li {
+  margin: 3px 0;
 }

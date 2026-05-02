@@ -1,17 +1,29 @@
 <!doctype html>
 <html lang="es">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>XDEI P3 - Frontend</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="static/css/map.css" />
-  </head>
-  <body>
-    <div id="map"></div>
-
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+    <script>
+      // BACKEND_BASE_URL will be substituted at container start by the Docker entrypoint.
+      // If not substituted, it defaults to an empty string (use same-origin).
+      window.BACKEND_BASE_URL = '__BACKEND_BASE_URL__';
+    </script>
+    <script>
+      (function () {
+        if (window.BACKEND_BASE_URL !== undefined) return;
+        try {
+          var host = location.hostname;
+          var port = location.port || '';
+          // If frontend served on 8081 (compose) or 8001 (local static serve), backend is likely on 8002 for local testing
+          if (port === '8081' || port === '8001') {
+            window.BACKEND_BASE_URL = location.protocol + '//' + host + ':8002';
+          } else {
+            // default to empty which keeps same-origin (relative) requests
+            window.BACKEND_BASE_URL = '';
+          }
+        } catch (e) {
+          window.BACKEND_BASE_URL = '';
+        }
+      })();
+    </script>
+    <script src="static/js/api-client.js"></script>
     <script src="static/js/map.js"></script>
     <script>
       document.addEventListener('DOMContentLoaded', function () {
