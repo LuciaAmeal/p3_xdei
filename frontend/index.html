@@ -4,81 +4,70 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>XDEI P3 - Frontend</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="static/css/map.css" />
-
-    <script>
-      // BACKEND_BASE_URL may be substituted at container start by the Docker entrypoint.
-      // If still unresolved, compute a local fallback.
-      window.BACKEND_BASE_URL = '__BACKEND_BASE_URL__';
-    </script>
-    <script>
-      (function () {
-        var current = window.BACKEND_BASE_URL;
-        var unresolved = !current || current === '__BACKEND_BASE_URL__';
-
-        if (!unresolved) {
-          try {
-            var parsed = new URL(current, location.origin);
-            if (parsed.hostname === 'backend') {
-              // Make docker-internal hostname reachable from host browser.
-              window.BACKEND_BASE_URL = parsed.protocol + '//' + location.hostname + (parsed.port ? ':' + parsed.port : '');
-            }
-          } catch (e) {
-            // Keep original value if parsing fails.
-          }
-          return;
-        }
-
-        try {
-          var host = location.hostname;
-          var port = location.port || '';
-
-          // For local static frontend ports, default backend to port 8002.
-          if (port === '8081' || port === '8001') {
-            window.BACKEND_BASE_URL = location.protocol + '//' + host + ':8002';
-          } else {
-            // Default to same-origin relative paths.
-            window.BACKEND_BASE_URL = '';
-          }
-        } catch (e) {
-          window.BACKEND_BASE_URL = '';
-        }
-      })();
-    </script>
   </head>
   <body>
-    <div id="hud">
-      <div id="map-status" class="hud-pill" aria-live="polite">Inicializando mapa…</div>
-      <div class="hud-legend" aria-hidden="true">
-        <span><i class="legend-swatch legend-route"></i>Rutas</span>
-        <span><i class="legend-swatch legend-stop"></i>Paradas</span>
-        <span><i class="legend-swatch legend-vehicle"></i>Vehículos</span>
-      </div>
-    </div>
-
-    <aside id="detail-panel" class="detail-panel detail-panel--empty" aria-live="polite" aria-label="Detalle seleccionado">
-      <div class="detail-panel__header">
-        <div>
-          <div class="detail-panel__eyebrow">Detalle</div>
-          <h2 class="detail-panel__title">Selecciona un vehículo o una parada</h2>
+    <main id="app-shell">
+      <section id="hud" aria-label="Estado del mapa">
+        <div class="hud-stack">
+          <div class="hud-pill">XDEI P3 · Modo histórico</div>
+          <div id="map-status" class="hud-pill hud-pill--muted">Cargando datos de movilidad…</div>
         </div>
-        <button id="detail-panel-close" class="detail-panel__close" type="button" aria-label="Cerrar panel">×</button>
-      </div>
-      <div id="detail-panel-body" class="detail-panel__body">
-        <p class="detail-panel__empty-state">Haz clic en un vehículo o una parada para ver su información.</p>
-      </div>
-    </aside>
+        <div class="hud-legend" aria-label="Leyenda">
+          <span><i class="legend-swatch legend-route"></i> Rutas</span>
+          <span><i class="legend-swatch legend-stop"></i> Paradas</span>
+          <span><i class="legend-swatch legend-vehicle"></i> Vehículos</span>
+        </div>
+      </section>
 
-    <div id="map"></div>
+      <section id="timeline-panel" class="timeline-panel" aria-label="Reproducción histórica">
+        <div class="timeline-panel__header">
+          <div>
+            <div class="timeline-panel__eyebrow">Replay</div>
+            <h2 class="timeline-panel__title">Línea temporal</h2>
+          </div>
+          <div class="timeline-panel__status" id="timeline-status">Cargando histórico…</div>
+        </div>
+        <div class="timeline-panel__meta">
+          <span id="timeline-label">Sin histórico disponible</span>
+          <span id="timeline-count">0 vehículos</span>
+        </div>
+        <input id="timeline-slider" class="timeline-slider" type="range" min="0" max="0" value="0" aria-label="Seleccionar instante histórico" disabled />
+        <div class="timeline-panel__actions">
+          <button id="timeline-play" type="button" class="timeline-button" disabled>Reproducir</button>
+          <button id="timeline-live" type="button" class="timeline-button timeline-button--ghost" disabled>Vista en vivo</button>
+        </div>
+      </section>
+
+      <div id="map" role="application" aria-label="Mapa de rutas y vehículos"></div>
+
+      <aside id="detail-panel" aria-label="Detalle contextual">
+        <div class="detail-panel__header">
+          <div>
+            <div class="detail-panel__eyebrow">Detalle</div>
+            <h2 class="detail-panel__title">Selecciona un vehículo o una parada</h2>
+          </div>
+          <button id="detail-panel-close" class="detail-panel__close" type="button" aria-label="Cerrar panel">×</button>
+        </div>
+        <div id="detail-panel-body" class="detail-panel__body"></div>
+      </aside>
+    </main>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="static/js/api-client.js"></script>
     <script src="static/js/map.js"></script>
     <script>
-      document.addEventListener('DOMContentLoaded', function () {
-        if (typeof initMap === 'function') initMap();
+      window.addEventListener('DOMContentLoaded', function () {
+        if (typeof window.initMap === 'function') {
+          window.initMap();
+        }
       });
     </script>
+      <script>
+        window.BACKEND_BASE_URL = '__BACKEND_BASE_URL__';
+      </script>
   </body>
 </html>
