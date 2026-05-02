@@ -94,8 +94,69 @@
     }
   }
 
+  async function loadCurrentVehicles() {
+    const vehiclesResponse = await fetchJson('/api/vehicles/current');
+    return Array.isArray(vehiclesResponse.vehicles) ? vehiclesResponse.vehicles : [];
+  }
+
+  function createVehiclePolling(options) {
+    const settings = options || {};
+    const intervalMs = Number.isFinite(settings.intervalMs) && settings.intervalMs > 0 ? settings.intervalMs : 2000;
+    const onData = typeof settings.onData === 'function' ? settings.onData : function () {};
+    const onError = typeof settings.onError === 'function' ? settings.onError : function () {};
+
+    let timerId = null;
+    let inFlight = false;
+
+    async function tick() {
+      if (inFlight) {
+        return;
+      }
+
+      inFlight = true;
+      try {
+        const vehicles = await loadCurrentVehicles();
+        onData(vehicles);
+      } catch (error) {
+        onError(error);
+      } finally {
+        inFlight = false;
+      }
+    }
+
+    function start() {
+      if (timerId) {
+        return;
+      }
+
+      tick();
+      timerId = window.setInterval(tick, intervalMs);
+    }
+
+    function stop() {
+      if (!timerId) {
+        return;
+      }
+
+      window.clearInterval(timerId);
+      timerId = null;
+      inFlight = false;
+    }
+
+    return {
+      start,
+      stop,
+      isRunning: function () {
+        return Boolean(timerId);
+      },
+      intervalMs,
+    };
+  }
+
   global.MapApiClient = {
     loadMapData,
+    loadCurrentVehicles,
+    createVehiclePolling,
     sampleData: () => cloneData(SAMPLE_DATA),
   };
 })(window);
