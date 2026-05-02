@@ -1,6 +1,10 @@
 function initMap() {
   const mapEl = document.getElementById('map');
   const statusEl = document.getElementById('map-status');
+  const detailPanelEl = document.getElementById('detail-panel');
+  const detailPanelBodyEl = document.getElementById('detail-panel-body');
+  const detailPanelTitleEl = detailPanelEl ? detailPanelEl.querySelector('.detail-panel__title') : null;
+  const detailPanelCloseEl = document.getElementById('detail-panel-close');
 
   if (!mapEl || typeof L === 'undefined') {
     return;
@@ -19,6 +23,16 @@ function initMap() {
   const vehicleMarkers = new Map();
   const vehicleStates = new Map();
   const vehiclePollingIntervalMs = 2000;
+  const routeIndexByTripId = new Map();
+  const routeIndexByStopId = new Map();
+  const stopIndexById = new Map();
+  const vehicleIndexById = new Map();
+  let selectedDetail = null;
+  let currentMapData = {
+    routes: [],
+    stops: [],
+    vehicles: [],
+  };
 
   let mapFitted = false;
   let pollingController = null;
@@ -38,6 +52,269 @@ function initMap() {
   function refreshStatus(suffix) {
     const base = `Rutas ${counters.routes} · Paradas ${counters.stops} · Vehículos ${counters.vehicles}`;
     setStatus(suffix ? `${base} · ${suffix}` : base);
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function setPanelEmpty(message) {
+    if (!detailPanelEl || !detailPanelBodyEl) {
+      return;
+    }
+
+    detailPanelEl.classList.add('detail-panel--empty');
+    detailPanelEl.setAttribute('data-detail-type', 'empty');
+
+    if (detailPanelTitleEl) {
+      detailPanelTitleEl.textContent = 'Selecciona un vehículo o una parada';
+    }
+
+    detailPanelBodyEl.innerHTML = `<p class="detail-panel__empty-state">${escapeHtml(message || 'Haz clic en un vehículo o una parada para ver su información.')}</p>`;
+  }
+
+  function setPanelContent(type, title, bodyHtml) {
+    if (!detailPanelEl || !detailPanelBodyEl) {
+      return;
+    }
+
+    detailPanelEl.classList.remove('detail-panel--empty');
+    detailPanelEl.setAttribute('data-detail-type', type);
+
+    if (detailPanelTitleEl) {
+      detailPanelTitleEl.textContent = title;
+    }
+
+    detailPanelBodyEl.innerHTML = bodyHtml;
+  }
+
+  function formatNumberMetric(value, suffix) {
+    if (typeof value !== 'number' || Number.isNaN(value)) {
+      return 'N/D';
+    }
+
+    return `${value}${suffix}`;
+  }
+
+  function formatTimeValue(value) {
+    if (!value) {
+      return 'N/D';
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return String(value);
+    }
+
+    return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function buildRouteIndexes(routes) {
+    routeIndexByTripId.clear();
+    routeIndexByStopId.clear();
+
+    (routes || []).forEach((route) => {
+      if (!route || !route.id) {
+        return;
+      }
+
+      if (Array.isArray(route.tripIds)) {
+        route.tripIds.forEach((tripId) => {
+          if (tripId) {
+            routeIndexByTripId.set(tripId, route);
+          }
+        });
+      }
+
+      if (Array.isArray(route.stopIds)) {
+        route.stopIds.forEach((stopId) => {
+          if (stopId) {
+            routeIndexByStopId.set(stopId, routeIndexByStopId.get(stopId) || []);
+            routeIndexByStopId.get(stopId).push(route);
+          }
+        });
+      }
+    });
+  }
+
+  function buildStopIndex(stops) {
+    stopIndexById.clear();
+
+    (stops || []).forEach((stop) => {
+      if (stop && stop.id) {
+        stopIndexById.set(stop.id, stop);
+      }
+    });
+  }
+
+  function buildVehicleIndex(vehicles) {
+    vehicleIndexById.clear();
+
+    (vehicles || []).forEach((vehicle) => {
+      if (vehicle && (vehicle.id || vehicle.vehicleId)) {
+        vehicleIndexById.set(vehicle.id || vehicle.vehicleId, vehicle);
+      }
+    });
+  }
+
+  function routeLabel(route) {
+    if (!route) {
+      return 'Ruta';
+    }
+
+    return route.routeLongName || route.routeShortName || route.id || 'Ruta';
+  }
+
+  function stopLabel(stop) {
+    if (!stop) {
+      return 'Parada';
+    }
+
+    return stop.stopName || stop.id || 'Parada';
+  }
+
+  function findRouteForVehicle(vehicle) {
+    if (!vehicle || !vehicle.tripId) {
+      return null;
+    }
+
+    return routeIndexByTripId.get(vehicle.tripId) || null;
+  }
+
+  function findRoutesForStop(stopId) {
+    return routeIndexByStopId.get(stopId) || [];
+  }
+
+  function renderRouteChips(route) {
+    return `<span class="detail-chip">${escapeHtml(routeLabel(route))}</span>`;
+  }
+
+  function renderVehiclePanel(vehicle) {
+    const route = findRouteForVehicle(vehicle);
+    const currentStop = vehicle.currentStopId ? stopIndexById.get(vehicle.currentStopId) : null;
+    const routeStops = route && Array.isArray(route.stopIds)
+      ? route.stopIds.map((stopId) => stopIndexById.get(stopId)).filter(Boolean)
+      : [];
+
+    const nextStops = routeStops.slice(0, 3).map((stop, index) => {
+      return `<li>${escapeHtml(stopLabel(stop))}${index === 0 && currentStop ? ' · parada actual' : ''}</li>`;
+    }).join('');
+
+    const sections = [];
+    sections.push(`
+      <section class="detail-panel__section">
+        <div class="detail-panel__section-title">Vehículo</div>
+        <p class="detail-panel__value">${escapeHtml(vehicle.vehicleId || vehicle.id || 'Sin identificador')}</p>
+        <p class="detail-panel__meta">Trip: ${escapeHtml(vehicle.tripId || 'sin asignar')}</p>
+        <div class="detail-panel__chips">
+          ${route ? renderRouteChips(route) : '<span class="detail-chip">Sin ruta asociada</span>'}
+          ${currentStop ? `<span class="detail-chip">${escapeHtml(stopLabel(currentStop))}</span>` : '<span class="detail-chip">Sin parada actual</span>'}
+        </div>
+      </section>
+    `);
+
+    sections.push(`
+      <section class="detail-panel__section">
+        <div class="detail-panel__section-title">Estado actual</div>
+        <p class="detail-panel__meta">Estado: ${escapeHtml(vehicle.status || 'sin estado')}</p>
+        <p class="detail-panel__meta">Retraso: ${escapeHtml(formatNumberMetric(vehicle.delaySeconds, ' s'))}</p>
+        <p class="detail-panel__meta">Ocupación: ${escapeHtml(formatNumberMetric(vehicle.occupancy, '%'))}</p>
+        <p class="detail-panel__meta">Velocidad: ${escapeHtml(formatNumberMetric(vehicle.speedKmh, ' km/h'))}</p>
+        ${vehicle.predictedArrivalTime ? `<p class="detail-panel__meta">Próxima llegada: ${escapeHtml(formatTimeValue(vehicle.predictedArrivalTime))}</p>` : ''}
+      </section>
+    `);
+
+    sections.push(`
+      <section class="detail-panel__section">
+        <div class="detail-panel__section-title">Próximas paradas</div>
+        ${routeStops.length ? `<ol class="detail-panel__list">${nextStops}</ol>` : '<p class="detail-panel__meta">No hay información de paradas asociadas para este vehículo.</p>'}
+      </section>
+    `);
+
+    setPanelContent('vehicle', `Vehículo ${vehicle.vehicleId || vehicle.id || ''}`.trim(), sections.join(''));
+  }
+
+  function renderStopPanel(stop) {
+    const routes = findRoutesForStop(stop.id);
+    const activeVehicles = Array.from(vehicleIndexById.values()).filter((vehicle) => vehicle.currentStopId === stop.id);
+
+    const sectionRoutes = routes.length
+      ? `<div class="detail-panel__chips">${routes.map(renderRouteChips).join('')}</div>`
+      : '<p class="detail-panel__meta">No hay rutas asociadas cargadas.</p>';
+
+    const sectionVehicles = activeVehicles.length
+      ? `<ul class="detail-panel__list">${activeVehicles.map((vehicle) => `<li>${escapeHtml(vehicle.vehicleId || vehicle.id || 'Vehículo')} · ${escapeHtml(vehicle.status || 'sin estado')}</li>`).join('')}</ul>`
+      : '<p class="detail-panel__meta">No hay vehículos en esta parada en este instante.</p>';
+
+    setPanelContent('stop', `Parada ${stop.stopName || stop.id || ''}`.trim(), `
+      <section class="detail-panel__section">
+        <div class="detail-panel__section-title">Parada</div>
+        <p class="detail-panel__value">${escapeHtml(stop.stopName || 'Parada')}</p>
+        <p class="detail-panel__meta">Código: ${escapeHtml(stop.stopCode || 'N/D')}</p>
+        ${stop.stopDesc ? `<p class="detail-panel__meta">${escapeHtml(stop.stopDesc)}</p>` : ''}
+        ${Array.isArray(stop.location) && stop.location.length >= 2 ? `<p class="detail-panel__meta">Coordenadas: ${escapeHtml(stop.location[1])}, ${escapeHtml(stop.location[0])}</p>` : ''}
+      </section>
+      <section class="detail-panel__section">
+        <div class="detail-panel__section-title">Rutas</div>
+        ${sectionRoutes}
+      </section>
+      <section class="detail-panel__section">
+        <div class="detail-panel__section-title">Vehículos asociados</div>
+        ${sectionVehicles}
+      </section>
+    `);
+  }
+
+  function selectVehicle(vehicle) {
+    if (!vehicle) {
+      return;
+    }
+
+    selectedDetail = { type: 'vehicle', id: vehicle.id || vehicle.vehicleId };
+    renderVehiclePanel(vehicle);
+  }
+
+  function selectStop(stop) {
+    if (!stop) {
+      return;
+    }
+
+    selectedDetail = { type: 'stop', id: stop.id };
+    renderStopPanel(stop);
+  }
+
+  function clearDetailPanel() {
+    selectedDetail = null;
+    setPanelEmpty();
+  }
+
+  function refreshSelectedDetail() {
+    if (!selectedDetail) {
+      return;
+    }
+
+    if (selectedDetail.type === 'vehicle') {
+      const vehicle = vehicleIndexById.get(selectedDetail.id);
+      if (vehicle) {
+        renderVehiclePanel(vehicle);
+        return;
+      }
+    }
+
+    if (selectedDetail.type === 'stop') {
+      const stop = stopIndexById.get(selectedDetail.id);
+      if (stop) {
+        renderStopPanel(stop);
+        return;
+      }
+    }
+
+    clearDetailPanel();
   }
 
   function normalizeColor(value, fallback) {
@@ -211,6 +488,9 @@ function initMap() {
       });
 
       marker.bindPopup(stopPopup(stop));
+      marker.on('click', function () {
+        selectStop(stop);
+      });
       marker.addTo(stopLayer);
       bounds.extend(marker.getLatLng());
     });
@@ -261,6 +541,9 @@ function initMap() {
       });
 
       marker.bindPopup(vehiclePopup(vehicle));
+      marker.on('click', function () {
+        selectVehicle(vehicle);
+      });
       marker.addTo(vehicleLayer);
       vehicleMarkers.set(vehicleId, marker);
       vehicleStates.set(vehicleId, {
@@ -307,6 +590,16 @@ function initMap() {
 
   function updateMap(data, options) {
     const settings = options || {};
+    currentMapData = {
+      routes: Array.isArray(data.routes) ? data.routes : [],
+      stops: Array.isArray(data.stops) ? data.stops : [],
+      vehicles: Array.isArray(data.vehicles) ? data.vehicles : [],
+    };
+
+    buildRouteIndexes(currentMapData.routes);
+    buildStopIndex(currentMapData.stops);
+    buildVehicleIndex(currentMapData.vehicles);
+
     const routeBounds = renderRoutes(data.routes || []);
     const stopBounds = renderStops(data.stops || []);
     const vehicleBounds = renderVehicles(data.vehicles || []);
@@ -316,16 +609,25 @@ function initMap() {
       mapFitted = true;
     }
 
-    counters.routes = (data.routes || []).length;
-    counters.stops = (data.stops || []).length;
-    counters.vehicles = (data.vehicles || []).length;
+    counters.routes = currentMapData.routes.length;
+    counters.stops = currentMapData.stops.length;
+    counters.vehicles = currentMapData.vehicles.length;
     refreshStatus('actualizando cada 2s');
+    refreshSelectedDetail();
   }
 
   function updateVehicles(vehicles) {
-    renderVehicles(vehicles || []);
-    counters.vehicles = (vehicles || []).length;
+    currentMapData = {
+      routes: currentMapData.routes,
+      stops: currentMapData.stops,
+      vehicles: Array.isArray(vehicles) ? vehicles : [],
+    };
+
+    buildVehicleIndex(currentMapData.vehicles);
+    renderVehicles(currentMapData.vehicles);
+    counters.vehicles = currentMapData.vehicles.length;
     refreshStatus('actualizando cada 2s');
+    refreshSelectedDetail();
   }
 
   function startVehiclePolling() {
@@ -387,6 +689,12 @@ function initMap() {
       animationFrameId = null;
     }
   });
+
+  if (detailPanelCloseEl) {
+    detailPanelCloseEl.addEventListener('click', clearDetailPanel);
+  }
+
+  setPanelEmpty();
 
   loadAndRender();
 }
