@@ -9,7 +9,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request, make_response
 from clients.orion import OrionClient, OrionClientConflict, OrionClientError
 from clients.quantumleap import QuantumLeapClient
 from clients.mqtt import MQTTClient
@@ -20,6 +20,25 @@ logger = setup_logger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
+
+
+@app.before_request
+def _handle_options_preflight():
+    """Respond to CORS preflight requests early to simplify browser calls."""
+    if request.method == 'OPTIONS':
+        resp = make_response()
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        resp.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        resp.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        return resp
+
+
+@app.after_request
+def _add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    return response
 
 # Initialize FIWARE clients with configuration
 orion_client = OrionClient(

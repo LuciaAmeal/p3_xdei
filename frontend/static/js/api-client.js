@@ -54,14 +54,16 @@
   }
 
   async function fetchJson(path) {
-    const response = await fetch(path, {
+    const base = (window.BACKEND_BASE_URL || '').replace(/\/+$/g, '');
+    const url = base ? `${base}${path}` : path;
+    const response = await fetch(url, {
       headers: {
         Accept: 'application/json',
       },
     });
 
     if (!response.ok) {
-      throw new Error(`Request failed for ${path}: ${response.status}`);
+      throw new Error(`Request failed for ${url}: ${response.status}`);
     }
 
     return response.json();

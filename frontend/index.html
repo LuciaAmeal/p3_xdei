@@ -19,6 +19,24 @@
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+      (function () {
+        if (window.BACKEND_BASE_URL !== undefined) return;
+        try {
+          var host = location.hostname;
+          var port = location.port || '';
+          // If frontend served on 8081 (compose) or 8001 (local static serve), backend is likely on 8002 for local testing
+          if (port === '8081' || port === '8001') {
+            window.BACKEND_BASE_URL = location.protocol + '//' + host + ':8002';
+          } else {
+            // default to empty which keeps same-origin (relative) requests
+            window.BACKEND_BASE_URL = '';
+          }
+        } catch (e) {
+          window.BACKEND_BASE_URL = '';
+        }
+      })();
+    </script>
     <script src="static/js/api-client.js"></script>
     <script src="static/js/map.js"></script>
     <script>
