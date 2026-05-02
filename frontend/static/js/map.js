@@ -16,11 +16,28 @@ function initMap() {
   const routeLayer = L.layerGroup().addTo(map);
   const stopLayer = L.layerGroup().addTo(map);
   const vehicleLayer = L.layerGroup().addTo(map);
+  const vehicleMarkers = new Map();
+  const vehicleStates = new Map();
+  const vehiclePollingIntervalMs = 2000;
+
+  let mapFitted = false;
+  let pollingController = null;
+  let animationFrameId = null;
+  const counters = {
+    routes: 0,
+    stops: 0,
+    vehicles: 0,
+  };
 
   function setStatus(message) {
     if (statusEl) {
       statusEl.textContent = message;
     }
+  }
+
+  function refreshStatus(suffix) {
+    const base = `Rutas ${counters.routes} · Paradas ${counters.stops} · Vehículos ${counters.vehicles}`;
+    setStatus(suffix ? `${base} · ${suffix}` : base);
   }
 
   function normalizeColor(value, fallback) {
@@ -65,6 +82,54 @@ function initMap() {
       iconAnchor: [9, 9],
       popupAnchor: [0, -10],
     });
+  }
+
+  function clamp01(value) {
+    return Math.max(0, Math.min(1, value));
+  }
+
+  function lerp(start, end, t) {
+    return start + (end - start) * t;
+  }
+
+  function animateVehicles(timestamp) {
+    let keepAnimating = false;
+
+    vehicleStates.forEach((state) => {
+      if (!state || !state.marker || !state.startLatLng || !state.targetLatLng) {
+        return;
+      }
+
+      const duration = Math.max(1, state.endTime - state.startTime);
+      const progress = clamp01((timestamp - state.startTime) / duration);
+      const lat = lerp(state.startLatLng.lat, state.targetLatLng.lat, progress);
+      const lng = lerp(state.startLatLng.lng, state.targetLatLng.lng, progress);
+      const interpolated = L.latLng(lat, lng);
+
+      state.currentLatLng = interpolated;
+      state.marker.setLatLng(interpolated);
+
+      if (progress < 1) {
+        keepAnimating = true;
+      } else {
+        state.startLatLng = state.targetLatLng;
+      }
+    });
+
+    if (keepAnimating) {
+      animationFrameId = window.requestAnimationFrame(animateVehicles);
+      return;
+    }
+
+    animationFrameId = null;
+  }
+
+  function ensureAnimationLoop() {
+    if (animationFrameId !== null) {
+      return;
+    }
+
+    animationFrameId = window.requestAnimationFrame(animateVehicles);
   }
 
   function routePopup(route) {
@@ -154,23 +219,72 @@ function initMap() {
   }
 
   function renderVehicles(vehicles) {
-    vehicleLayer.clearLayers();
     const bounds = L.latLngBounds([]);
+    const activeVehicleIds = new Set();
+    const now = window.performance && typeof window.performance.now === 'function'
+      ? window.performance.now()
+      : Date.now();
 
     vehicles.forEach((vehicle) => {
       if (!Array.isArray(vehicle.currentPosition) || vehicle.currentPosition.length < 2) {
         return;
       }
 
-      const marker = L.marker([vehicle.currentPosition[1], vehicle.currentPosition[0]], {
+      const vehicleId = vehicle.id || vehicle.vehicleId;
+      if (!vehicleId) {
+        return;
+      }
+
+      activeVehicleIds.add(vehicleId);
+      const latLng = L.latLng(vehicle.currentPosition[1], vehicle.currentPosition[0]);
+
+      const existingMarker = vehicleMarkers.get(vehicleId);
+      if (existingMarker) {
+        const state = vehicleStates.get(vehicleId);
+        const currentLatLng = state && state.currentLatLng ? state.currentLatLng : existingMarker.getLatLng();
+
+        if (state) {
+          state.startLatLng = currentLatLng;
+          state.targetLatLng = latLng;
+          state.startTime = now;
+          state.endTime = now + vehiclePollingIntervalMs;
+        }
+
+        existingMarker.setPopupContent(vehiclePopup(vehicle));
+        bounds.extend(latLng);
+        return;
+      }
+
+      const marker = L.marker(latLng, {
         icon: markerIcon('map-marker--vehicle', vehicle.vehicleId ? vehicle.vehicleId.replace(/^bus-/, '') : 'V'),
         title: vehicle.vehicleId || vehicle.id,
       });
 
       marker.bindPopup(vehiclePopup(vehicle));
       marker.addTo(vehicleLayer);
-      bounds.extend(marker.getLatLng());
+      vehicleMarkers.set(vehicleId, marker);
+      vehicleStates.set(vehicleId, {
+        marker,
+        currentLatLng: latLng,
+        startLatLng: latLng,
+        targetLatLng: latLng,
+        startTime: now,
+        endTime: now + vehiclePollingIntervalMs,
+      });
+      bounds.extend(latLng);
     });
+
+    vehicleMarkers.forEach((marker, vehicleId) => {
+      if (activeVehicleIds.has(vehicleId)) {
+        return;
+      }
+
+      vehicleLayer.removeLayer(marker);
+      vehicleMarkers.delete(vehicleId);
+      vehicleStates.delete(vehicleId);
+    });
+
+    ensureAnimationLoop();
 
     return bounds;
   }
@@ -191,17 +305,50 @@ function initMap() {
     }
   }
 
-  function updateMap(data) {
+  function updateMap(data, options) {
+    const settings = options || {};
     const routeBounds = renderRoutes(data.routes || []);
     const stopBounds = renderStops(data.stops || []);
     const vehicleBounds = renderVehicles(data.vehicles || []);
 
-    fitToData([routeBounds, stopBounds, vehicleBounds]);
+    if (!mapFitted || settings.fitBounds) {
+      fitToData([routeBounds, stopBounds, vehicleBounds]);
+      mapFitted = true;
+    }
 
-    const routeCount = (data.routes || []).length;
-    const stopCount = (data.stops || []).length;
-    const vehicleCount = (data.vehicles || []).length;
-    setStatus(`Rutas ${routeCount} · Paradas ${stopCount} · Vehículos ${vehicleCount}`);
+    counters.routes = (data.routes || []).length;
+    counters.stops = (data.stops || []).length;
+    counters.vehicles = (data.vehicles || []).length;
+    refreshStatus('actualizando cada 2s');
+  }
+
+  function updateVehicles(vehicles) {
+    renderVehicles(vehicles || []);
+    counters.vehicles = (vehicles || []).length;
+    refreshStatus('actualizando cada 2s');
+  }
+
+  function startVehiclePolling() {
+    if (!window.MapApiClient || typeof window.MapApiClient.createVehiclePolling !== 'function') {
+      return;
+    }
+
+    if (pollingController && pollingController.isRunning()) {
+      return;
+    }
+
+    pollingController = window.MapApiClient.createVehiclePolling({
+      intervalMs: vehiclePollingIntervalMs,
+      onData: function (vehicles) {
+        updateVehicles(vehicles);
+      },
+      onError: function (error) {
+        console.warn('Vehicle polling failed:', error);
+        refreshStatus('reintentando conexion');
+      },
+    });
+
+    pollingController.start();
   }
 
   function loadAndRender() {
@@ -212,11 +359,15 @@ function initMap() {
       : Promise.resolve(window.MapApiClient ? window.MapApiClient.sampleData() : { routes: [], stops: [], vehicles: [] });
 
     loader
-      .then((data) => updateMap(data))
+      .then((data) => {
+        updateMap(data, { fitBounds: true });
+        startVehiclePolling();
+      })
       .catch((error) => {
         console.warn('Unable to render map data:', error);
         if (window.MapApiClient && typeof window.MapApiClient.sampleData === 'function') {
-          updateMap(window.MapApiClient.sampleData());
+          updateMap(window.MapApiClient.sampleData(), { fitBounds: true });
+          startVehiclePolling();
         }
         setStatus('Mostrando datos de muestra');
       });
@@ -224,6 +375,17 @@ function initMap() {
 
   window.addEventListener('resize', function () {
     map.invalidateSize();
+  });
+
+  window.addEventListener('beforeunload', function () {
+    if (pollingController) {
+      pollingController.stop();
+    }
+
+    if (animationFrameId !== null) {
+      window.cancelAnimationFrame(animationFrameId);
+      animationFrameId = null;
+    }
   });
 
   loadAndRender();
