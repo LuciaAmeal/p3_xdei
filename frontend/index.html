@@ -8,10 +8,18 @@
     <link rel="stylesheet" href="static/css/map.css" />
   </head>
   <body>
+    <div id="hud">
+      <div id="map-status" class="hud-pill">Cargando datos de movilidad…</div>
+      <div id="map-legend" class="hud-legend">
+        <span><i class="legend-swatch legend-route"></i>Rutas</span>
+        <span><i class="legend-swatch legend-stop"></i>Paradas</span>
+        <span><i class="legend-swatch legend-vehicle"></i>Vehículos</span>
+      </div>
+    </div>
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+    <script src="static/js/api-client.js"></script>
     <script src="static/js/map.js"></script>
     <script>
       document.addEventListener('DOMContentLoaded', function () {
