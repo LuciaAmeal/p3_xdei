@@ -72,6 +72,31 @@ def _make_vehicle(vehicle_id: str = "urn:ngsi-ld:VehicleState:bus-17"):
     }
 
 
+def _make_vehicle_history(vehicle_id: str, base_lon: float, base_lat: float):
+    return {
+        "id": vehicle_id,
+        "type": "VehicleState",
+        "index": ["2026-05-02T12:00:00Z", "2026-05-02T12:02:00Z"],
+        "attributes": [
+            {
+                "attrName": "currentPosition",
+                "values": [
+                    {"type": "Point", "coordinates": [base_lon, base_lat]},
+                    {"type": "Point", "coordinates": [base_lon + 0.01, base_lat + 0.01]},
+                ],
+            },
+            {
+                "attrName": "delaySeconds",
+                "values": [45, 50],
+            },
+            {
+                "attrName": "status",
+                "values": ["in_transit", "approaching"],
+            },
+        ],
+    }
+
+
 @patch("app.orion_client")
 def test_api_routes_returns_render_ready_payload(mock_orion):
     mock_orion.get_entities.side_effect = lambda entity_type=None, **kwargs: {
@@ -124,3 +149,42 @@ def test_api_current_vehicles_returns_vehicle_state(mock_orion):
     assert payload["vehicles"][0]["vehicleId"] == "bus-17"
     assert payload["vehicles"][0]["currentPosition"] == [-8.405, 43.365]
     assert payload["vehicles"][0]["tripId"] == "urn:ngsi-ld:GtfsTrip:t1"
+
+
+@patch("app.ql_client")
+def test_api_vehicle_history_groups_and_paginates_by_vehicle(mock_ql):
+    mock_ql.get_available_entities.return_value = [
+        "urn:ngsi-ld:VehicleState:bus-17",
+        "urn:ngsi-ld:VehicleState:bus-18",
+        "urn:ngsi-ld:Sensor:ignore-me",
+    ]
+    mock_ql.get_time_series.side_effect = lambda entity_id, **kwargs: {
+        "urn:ngsi-ld:VehicleState:bus-17": _make_vehicle_history("urn:ngsi-ld:VehicleState:bus-17", -8.41, 43.37),
+        "urn:ngsi-ld:VehicleState:bus-18": _make_vehicle_history("urn:ngsi-ld:VehicleState:bus-18", -8.40, 43.36),
+    }[entity_id]
+
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        response = client.get(
+            "/api/vehicles/history?fromDate=2026-05-02T12:00:00Z&toDate=2026-05-02T13:00:00Z&page=1&pageSize=1"
+        )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["pagination"] == {"page": 1, "pageSize": 1, "totalVehicles": 2, "totalPages": 2}
+    assert payload["filters"]["fromDate"] == "2026-05-02T12:00:00Z"
+    assert payload["vehicles"][0]["vehicleId"] == "bus-17"
+    assert payload["vehicles"][0]["sampleCount"] == 2
+    assert payload["vehicles"][0]["history"][0]["currentPosition"] == [-8.41, 43.37]
+    assert payload["vehicles"][0]["history"][1]["delaySeconds"] == 50
+
+
+@patch("app.ql_client")
+def test_api_vehicle_history_rejects_invalid_page(mock_ql):
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        response = client.get("/api/vehicles/history?page=0")
+
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert "error" in payload

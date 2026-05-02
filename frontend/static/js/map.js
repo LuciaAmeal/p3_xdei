@@ -1,6 +1,12 @@
 function initMap() {
   const mapEl = document.getElementById('map');
   const statusEl = document.getElementById('map-status');
+  const timelinePanelEl = document.getElementById('timeline-panel');
+  const timelineStatusEl = document.getElementById('timeline-status');
+  const timelineRangeEl = document.getElementById('timeline-slider');
+  const timelineLabelEl = document.getElementById('timeline-label');
+  const timelinePlayEl = document.getElementById('timeline-play');
+  const timelineLiveEl = document.getElementById('timeline-live');
   const detailPanelEl = document.getElementById('detail-panel');
   const detailPanelBodyEl = document.getElementById('detail-panel-body');
   const detailPanelTitleEl = detailPanelEl ? detailPanelEl.querySelector('.detail-panel__title') : null;
@@ -28,6 +34,11 @@ function initMap() {
   const stopIndexById = new Map();
   const vehicleIndexById = new Map();
   let selectedDetail = null;
+  let replayHistory = [];
+  let replayTimestamps = [];
+  let replayCursor = 0;
+  let replayTimerId = null;
+  let replayActive = false;
   let currentMapData = {
     routes: [],
     stops: [],
@@ -52,6 +63,26 @@ function initMap() {
   function refreshStatus(suffix) {
     const base = `Rutas ${counters.routes} · Paradas ${counters.stops} · Vehículos ${counters.vehicles}`;
     setStatus(suffix ? `${base} · ${suffix}` : base);
+  }
+
+  function setTimelineStatus(message) {
+    if (timelineStatusEl) {
+      timelineStatusEl.textContent = message;
+    }
+  }
+
+  function setTimelineControlsDisabled(disabled) {
+    if (timelineRangeEl) {
+      timelineRangeEl.disabled = disabled;
+    }
+
+    if (timelinePlayEl) {
+      timelinePlayEl.disabled = disabled;
+    }
+
+    if (timelineLiveEl) {
+      timelineLiveEl.disabled = disabled;
+    }
   }
 
   function escapeHtml(value) {
@@ -114,6 +145,22 @@ function initMap() {
     return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
   }
 
+  function formatReplayLabel(value) {
+    if (!value) {
+      return 'Sin histórico';
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return String(value);
+    }
+
+    return date.toLocaleString('es-ES', {
+      dateStyle: 'medium',
+      timeStyle: 'medium',
+    });
+  }
+
   function buildRouteIndexes(routes) {
     routeIndexByTripId.clear();
     routeIndexByStopId.clear();
@@ -160,6 +207,236 @@ function initMap() {
         vehicleIndexById.set(vehicle.id || vehicle.vehicleId, vehicle);
       }
     });
+  }
+
+  function buildReplayIndex(historyVehicles) {
+    replayHistory = [];
+    replayTimestamps = [];
+
+    if (!Array.isArray(historyVehicles) || !historyVehicles.length) {
+      replayCursor = 0;
+      setTimelineControlsDisabled(true);
+      setTimelineStatus('Sin datos históricos');
+      if (timelineCountEl) {
+        timelineCountEl.textContent = '0 vehículos';
+      }
+      if (timelineLabelEl) {
+        timelineLabelEl.textContent = 'No hay histórico disponible';
+      }
+      return;
+    }
+
+    const timestampSet = new Set();
+    replayHistory = historyVehicles
+      .map((vehicle) => {
+        if (!vehicle || !Array.isArray(vehicle.history) || !vehicle.history.length) {
+          return null;
+        }
+
+        const history = vehicle.history
+          .filter((entry) => entry && entry.timestamp)
+          .slice()
+          .sort((left, right) => new Date(left.timestamp) - new Date(right.timestamp));
+
+        history.forEach((entry) => timestampSet.add(entry.timestamp));
+
+        return {
+          id: vehicle.id,
+          vehicleId: vehicle.vehicleId || vehicle.id,
+          history,
+        };
+      })
+      .filter(Boolean);
+
+    replayTimestamps = Array.from(timestampSet).sort((left, right) => new Date(left) - new Date(right));
+    replayCursor = replayTimestamps.length ? replayTimestamps.length - 1 : 0;
+    setTimelineControlsDisabled(!replayTimestamps.length);
+    setTimelineStatus(replayTimestamps.length ? 'Histórico listo' : 'Sin datos históricos');
+
+    if (timelineCountEl) {
+      timelineCountEl.textContent = `${replayHistory.length} vehículos · ${replayTimestamps.length} instantes`;
+    }
+
+    if (timelineRangeEl) {
+      timelineRangeEl.min = '0';
+      timelineRangeEl.max = String(Math.max(0, replayTimestamps.length - 1));
+      timelineRangeEl.step = '1';
+      timelineRangeEl.value = String(replayCursor);
+    }
+
+    if (timelineLabelEl) {
+      timelineLabelEl.textContent = replayTimestamps.length
+        ? formatReplayLabel(replayTimestamps[replayCursor])
+        : 'No hay histórico disponible';
+    }
+  }
+
+  function pickHistoryRecord(history, timestamp) {
+    if (!Array.isArray(history) || !history.length || !timestamp) {
+      return null;
+    }
+
+    const targetTime = new Date(timestamp).getTime();
+    if (Number.isNaN(targetTime)) {
+      return null;
+    }
+
+    let selected = history[0];
+
+    history.forEach((entry) => {
+      const entryTime = new Date(entry.timestamp).getTime();
+      if (!Number.isNaN(entryTime) && entryTime <= targetTime) {
+        selected = entry;
+      }
+    });
+
+    return selected;
+  }
+
+  function buildReplaySnapshot(timestamp) {
+    return replayHistory
+      .map((vehicle) => {
+        const historyRecord = pickHistoryRecord(vehicle.history, timestamp);
+        if (!historyRecord || !Array.isArray(historyRecord.currentPosition)) {
+          return null;
+        }
+
+        return {
+          id: vehicle.id,
+          vehicleId: vehicle.vehicleId,
+          tripId: historyRecord.trip || historyRecord.tripId,
+          currentStopId: historyRecord.currentStopId,
+          currentPosition: historyRecord.currentPosition,
+          delaySeconds: historyRecord.delaySeconds,
+          occupancy: historyRecord.occupancy,
+          speedKmh: historyRecord.speedKmh,
+          heading: historyRecord.heading,
+          status: historyRecord.status,
+          nextStopName: historyRecord.nextStopName,
+          predictedArrivalTime: historyRecord.predictedArrivalTime,
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function renderReplayFrame(options) {
+    const settings = options || {};
+    if (!replayTimestamps.length) {
+      return;
+    }
+
+    const timestamp = replayTimestamps[replayCursor];
+    const snapshotVehicles = buildReplaySnapshot(timestamp);
+
+    if (timelineLabelEl) {
+      timelineLabelEl.textContent = formatReplayLabel(timestamp);
+    }
+
+    updateVehicles(snapshotVehicles, { animate: settings.animate !== false });
+  }
+
+  function stopReplayPlayback() {
+    if (replayTimerId !== null) {
+      window.clearInterval(replayTimerId);
+      replayTimerId = null;
+    }
+
+    if (timelinePlayEl) {
+      timelinePlayEl.textContent = 'Reproducir';
+      timelinePlayEl.setAttribute('aria-pressed', 'false');
+    }
+  }
+
+  function pauseLivePolling() {
+    if (pollingController) {
+      pollingController.stop();
+      pollingController = null;
+    }
+  }
+
+  function enterReplayMode() {
+    if (!replayTimestamps.length) {
+      return;
+    }
+
+    replayActive = true;
+    pauseLivePolling();
+    setTimelineStatus('Reproducción histórica activa');
+    if (timelineLiveEl) {
+      timelineLiveEl.textContent = 'Volver a vivo';
+    }
+  }
+
+  function returnToLiveMode() {
+    replayActive = false;
+    stopReplayPlayback();
+    setTimelineStatus('Vista en vivo');
+    if (timelineLiveEl) {
+      timelineLiveEl.textContent = 'Vista en vivo';
+    }
+
+    if (timelineLabelEl && replayTimestamps.length) {
+      timelineLabelEl.textContent = formatReplayLabel(replayTimestamps[replayTimestamps.length - 1]);
+    }
+
+    startVehiclePolling();
+  }
+
+  function seekReplay(cursor, options) {
+    if (!replayTimestamps.length) {
+      return;
+    }
+
+    const clampedCursor = Math.max(0, Math.min(replayTimestamps.length - 1, cursor));
+    replayCursor = clampedCursor;
+
+    if (timelineRangeEl) {
+      timelineRangeEl.value = String(clampedCursor);
+    }
+
+    renderReplayFrame(options);
+  }
+
+  function startReplayPlayback() {
+    if (!replayTimestamps.length) {
+      return;
+    }
+
+    enterReplayMode();
+
+    if (replayCursor >= replayTimestamps.length - 1) {
+      replayCursor = 0;
+    }
+
+    stopReplayPlayback();
+    if (timelinePlayEl) {
+      timelinePlayEl.textContent = 'Pausar';
+      timelinePlayEl.setAttribute('aria-pressed', 'true');
+    }
+
+    renderReplayFrame({ animate: false });
+
+    replayTimerId = window.setInterval(function () {
+      if (replayCursor >= replayTimestamps.length - 1) {
+        stopReplayPlayback();
+        return;
+      }
+
+      seekReplay(replayCursor + 1, { animate: false });
+    }, 1100);
+  }
+
+  function toggleReplayPlayback() {
+    if (!replayTimestamps.length) {
+      return;
+    }
+
+    if (replayTimerId !== null) {
+      stopReplayPlayback();
+      return;
+    }
+
+    startReplayPlayback();
   }
 
   function routeLabel(route) {
@@ -498,7 +775,9 @@ function initMap() {
     return bounds;
   }
 
-  function renderVehicles(vehicles) {
+  function renderVehicles(vehicles, options) {
+    const settings = options || {};
+    const animate = settings.animate !== false;
     const bounds = L.latLngBounds([]);
     const activeVehicleIds = new Set();
     const now = window.performance && typeof window.performance.now === 'function'
@@ -522,16 +801,21 @@ function initMap() {
       if (existingMarker) {
         const state = vehicleStates.get(vehicleId);
         const currentLatLng = state && state.currentLatLng ? state.currentLatLng : existingMarker.getLatLng();
+        const targetLatLng = latLng;
 
         if (state) {
-          state.startLatLng = currentLatLng;
-          state.targetLatLng = latLng;
+          state.startLatLng = animate ? currentLatLng : targetLatLng;
+          state.targetLatLng = targetLatLng;
           state.startTime = now;
           state.endTime = now + vehiclePollingIntervalMs;
+          if (!animate) {
+            state.currentLatLng = targetLatLng;
+            existingMarker.setLatLng(targetLatLng);
+          }
         }
 
         existingMarker.setPopupContent(vehiclePopup(vehicle));
-        bounds.extend(latLng);
+        bounds.extend(targetLatLng);
         return;
       }
 
@@ -555,6 +839,10 @@ function initMap() {
         endTime: now + vehiclePollingIntervalMs,
       });
       bounds.extend(latLng);
+
+      if (!animate) {
+        marker.setLatLng(latLng);
+      }
     });
 
     vehicleMarkers.forEach((marker, vehicleId) => {
@@ -567,7 +855,9 @@ function initMap() {
       vehicleStates.delete(vehicleId);
     });
 
-    ensureAnimationLoop();
+    if (animate) {
+      ensureAnimationLoop();
+    }
 
     return bounds;
   }
@@ -602,7 +892,7 @@ function initMap() {
 
     const routeBounds = renderRoutes(data.routes || []);
     const stopBounds = renderStops(data.stops || []);
-    const vehicleBounds = renderVehicles(data.vehicles || []);
+    const vehicleBounds = renderVehicles(data.vehicles || [], { animate: settings.animate !== false });
 
     if (!mapFitted || settings.fitBounds) {
       fitToData([routeBounds, stopBounds, vehicleBounds]);
@@ -612,11 +902,12 @@ function initMap() {
     counters.routes = currentMapData.routes.length;
     counters.stops = currentMapData.stops.length;
     counters.vehicles = currentMapData.vehicles.length;
-    refreshStatus('actualizando cada 2s');
+    refreshStatus(replayActive ? 'reproducción histórica' : 'actualizando cada 2s');
     refreshSelectedDetail();
   }
 
-  function updateVehicles(vehicles) {
+  function updateVehicles(vehicles, options) {
+    const settings = options || {};
     currentMapData = {
       routes: currentMapData.routes,
       stops: currentMapData.stops,
@@ -624,9 +915,9 @@ function initMap() {
     };
 
     buildVehicleIndex(currentMapData.vehicles);
-    renderVehicles(currentMapData.vehicles);
+    renderVehicles(currentMapData.vehicles, { animate: settings.animate !== false });
     counters.vehicles = currentMapData.vehicles.length;
-    refreshStatus('actualizando cada 2s');
+    refreshStatus(replayActive ? 'reproducción histórica' : 'actualizando cada 2s');
     refreshSelectedDetail();
   }
 
@@ -653,22 +944,86 @@ function initMap() {
     pollingController.start();
   }
 
+  function stopVehiclePolling() {
+    if (!pollingController) {
+      return;
+    }
+
+    pollingController.stop();
+    pollingController = null;
+  }
+
+  function bindTimelineControls() {
+    if (timelineRangeEl) {
+      timelineRangeEl.addEventListener('input', function () {
+        if (!replayTimestamps.length) {
+          return;
+        }
+
+        enterReplayMode();
+        seekReplay(Number(this.value), { animate: false });
+      });
+    }
+
+    if (timelinePlayEl) {
+      timelinePlayEl.addEventListener('click', function () {
+        toggleReplayPlayback();
+      });
+    }
+
+    if (timelineLiveEl) {
+      timelineLiveEl.addEventListener('click', function () {
+        returnToLiveMode();
+      });
+    }
+  }
+
+  function loadTimelineHistory() {
+    if (!window.MapApiClient || typeof window.MapApiClient.loadAllVehicleHistory !== 'function') {
+      buildReplayIndex([]);
+      return Promise.resolve();
+    }
+
+    setTimelineStatus('Cargando histórico…');
+    return window.MapApiClient.loadAllVehicleHistory({ pageSize: 100 })
+      .then(function (history) {
+        buildReplayIndex(history && Array.isArray(history.vehicles) ? history.vehicles : []);
+      })
+      .catch(function (error) {
+        console.warn('Unable to load vehicle history:', error);
+        buildReplayIndex([]);
+      });
+  }
+
   function loadAndRender() {
     setStatus('Cargando datos de movilidad…');
 
-    const loader = window.MapApiClient && typeof window.MapApiClient.loadMapData === 'function'
+    const mapLoader = window.MapApiClient && typeof window.MapApiClient.loadMapData === 'function'
       ? window.MapApiClient.loadMapData()
       : Promise.resolve(window.MapApiClient ? window.MapApiClient.sampleData() : { routes: [], stops: [], vehicles: [] });
 
-    loader
-      .then((data) => {
-        updateMap(data, { fitBounds: true });
+    Promise.allSettled([mapLoader, loadTimelineHistory()])
+      .then(function (results) {
+        const mapResult = results[0];
+
+        if (mapResult.status === 'fulfilled') {
+          updateMap(mapResult.value, { fitBounds: true, animate: false });
+        } else if (window.MapApiClient && typeof window.MapApiClient.sampleData === 'function') {
+          updateMap(window.MapApiClient.sampleData(), { fitBounds: true, animate: false });
+          setStatus('Mostrando datos de muestra');
+        }
+
+        bindTimelineControls();
         startVehiclePolling();
+
+        if (replayTimestamps.length) {
+          setTimelineStatus('Usa la línea temporal para reproducir el histórico');
+        }
       })
-      .catch((error) => {
+      .catch(function (error) {
         console.warn('Unable to render map data:', error);
         if (window.MapApiClient && typeof window.MapApiClient.sampleData === 'function') {
-          updateMap(window.MapApiClient.sampleData(), { fitBounds: true });
+          updateMap(window.MapApiClient.sampleData(), { fitBounds: true, animate: false });
           startVehiclePolling();
         }
         setStatus('Mostrando datos de muestra');
@@ -680,9 +1035,8 @@ function initMap() {
   });
 
   window.addEventListener('beforeunload', function () {
-    if (pollingController) {
-      pollingController.stop();
-    }
+    stopVehiclePolling();
+    stopReplayPlayback();
 
     if (animationFrameId !== null) {
       window.cancelAnimationFrame(animationFrameId);
@@ -695,6 +1049,8 @@ function initMap() {
   }
 
   setPanelEmpty();
+  setTimelineControlsDisabled(true);
+  setTimelineStatus('Cargando histórico…');
 
   loadAndRender();
 }

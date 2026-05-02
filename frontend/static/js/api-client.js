@@ -53,8 +53,40 @@
     return JSON.parse(JSON.stringify(data));
   }
 
+  function resolveBackendBaseUrl() {
+    const configuredValue = (window.BACKEND_BASE_URL || '').trim().replace(/\/+$/g, '');
+
+    if (configuredValue && configuredValue !== '__BACKEND_BASE_URL__') {
+      return configuredValue;
+    }
+
+    if (window.location.protocol === 'file:') {
+      return 'http://127.0.0.1:8000';
+    }
+
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return `${window.location.protocol}//${window.location.hostname}:8000`;
+    }
+
+    return '';
+  }
+
+  function buildQueryString(params) {
+    const searchParams = new URLSearchParams();
+
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value === null || value === undefined || value === '') {
+        return;
+      }
+
+      searchParams.set(key, String(value));
+    });
+
+    return searchParams.toString();
+  }
+
   async function fetchJson(path) {
-    const base = (window.BACKEND_BASE_URL || '').replace(/\/+$/g, '');
+    const base = resolveBackendBaseUrl();
     const url = base ? `${base}${path}` : path;
     const response = await fetch(url, {
       headers: {
@@ -99,11 +131,110 @@
     return Array.isArray(vehiclesResponse.vehicles) ? vehiclesResponse.vehicles : [];
   }
 
-  function createVehiclePolling(options) {
+  async function loadVehicleHistory(options) {
     const settings = options || {};
+    const query = buildQueryString({
+      fromDate: settings.fromDate,
+      toDate: settings.toDate,
+      page: settings.page,
+      pageSize: settings.pageSize,
+      vehicleId: settings.vehicleId,
+    });
+    const response = await fetchJson(`/api/vehicles/history${query ? `?${query}` : ''}`);
+
+    return {
+      vehicles: Array.isArray(response.vehicles) ? response.vehicles : [],
+      pagination: response.pagination || {
+        page: 1,
+        pageSize: 0,
+        totalVehicles: 0,
+        totalPages: 0,
+      },
+      filters: response.filters || {},
+    };
+  }
+
+  async function loadAllVehicleHistory(options) {
+    const settings = options || {};
+    const pageSize = Number.isFinite(settings.pageSize) && settings.pageSize > 0 ? settings.pageSize : 100;
+    const collectedVehicles = [];
+    let page = Number.isFinite(settings.page) && settings.page > 0 ? settings.page : 1;
+    let pagination = {
+      page,
+      pageSize,
+      totalVehicles: 0,
+      totalPages: 0,
+    };
+    let filters = {};
+
+    while (true) {
+      const response = await loadVehicleHistory({
+        fromDate: settings.fromDate,
+        toDate: settings.toDate,
+        vehicleId: settings.vehicleId,
+        page,
+        pageSize,
+      });
+
+      collectedVehicles.push(...response.vehicles);
+      pagination = response.pagination || pagination;
+      filters = response.filters || filters;
+
+      if (!pagination.totalPages || page >= pagination.totalPages) {
+        break;
+      }
+
+
+          function buildBackendCandidates() {
+            const candidates = [];
+            const configuredBase = resolveBackendBaseUrl();
+
+            if (configuredBase) {
+              candidates.push(configuredBase);
+            }
+
+            if (window.location.protocol !== 'file:') {
+              const host = window.location.hostname;
+              if (host === 'localhost' || host === '127.0.0.1') {
+                candidates.push(`${window.location.protocol}//${host}:8000`);
+                candidates.push(`${window.location.protocol}//${host}:8002`);
+              }
+            } else {
+              candidates.push('http://127.0.0.1:8000');
+              candidates.push('http://127.0.0.1:8002');
+            }
+
+            return Array.from(new Set(candidates.filter(Boolean)));
+          }
+
+          async function fetchJsonFromBase(base, path) {
+            const url = base ? `${base}${path}` : path;
+            const response = await fetch(url, {
+              headers: {
+                Accept: 'application/json',
+              },
+            });
+
+            if (!response.ok) {
+              throw new Error(`Request failed for ${url}: ${response.status}`);
+            }
+
+            return response.json();
+          }
+      page += 1;
+    }
+            const candidates = buildBackendCandidates();
+            let lastError = null;
+
+            for (const base of candidates) {
+              try {
+                return await fetchJsonFromBase(base, path);
+              } catch (error) {
+                lastError = error;
+              }
     const intervalMs = Number.isFinite(settings.intervalMs) && settings.intervalMs > 0 ? settings.intervalMs : 2000;
     const onData = typeof settings.onData === 'function' ? settings.onData : function () {};
-    const onError = typeof settings.onError === 'function' ? settings.onError : function () {};
+            throw lastError || new Error(`Request failed for ${path}`);
 
     let timerId = null;
     let inFlight = false;
@@ -156,6 +287,8 @@
   global.MapApiClient = {
     loadMapData,
     loadCurrentVehicles,
+    loadVehicleHistory,
+    loadAllVehicleHistory,
     createVehiclePolling,
     sampleData: () => cloneData(SAMPLE_DATA),
   };

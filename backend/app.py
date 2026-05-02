@@ -4,6 +4,8 @@ XDEI Backend - Flask Application
 Main application entry point with health check and service status endpoints.
 """
 
+import math
+import os
 import time
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -11,7 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from flask import Flask, jsonify, request, make_response
 from clients.orion import OrionClient, OrionClientConflict, OrionClientError
-from clients.quantumleap import QuantumLeapClient
+from clients.quantumleap import QuantumLeapClient, QuantumLeapError, QuantumLeapNotFound
 from clients.mqtt import MQTTClient
 from config import settings
 from utils.logger import setup_logger
@@ -72,6 +74,9 @@ VEHICLE_STATE_HISTORY_WATCHED_ATTRS = [
     "status",
     "trip",
 ]
+VEHICLE_HISTORY_PAGE_SIZE_DEFAULT = 20
+VEHICLE_HISTORY_PAGE_SIZE_MAX = 100
+VEHICLE_HISTORY_SAMPLE_LIMIT = 1000
 
 
 def _attribute_value(entity: Dict[str, Any], name: str, default: Any = None) -> Any:
@@ -298,6 +303,166 @@ def _build_vehicle_payloads() -> List[Dict[str, Any]]:
     return payloads
 
 
+def _is_vehicle_state_entity_id(entity_id: str) -> bool:
+    if not isinstance(entity_id, str):
+        return False
+
+    parts = entity_id.split(":")
+    return len(parts) >= 4 and parts[2] == "VehicleState"
+
+
+def _parse_history_int(raw_value: Optional[str], default: int, minimum: int = 1, maximum: Optional[int] = None) -> int:
+    if raw_value in (None, ""):
+        return default
+
+    try:
+        parsed_value = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Invalid integer value: {raw_value}") from exc
+
+    if parsed_value < minimum:
+        raise ValueError(f"Value must be at least {minimum}")
+
+    if maximum is not None:
+        parsed_value = min(parsed_value, maximum)
+
+    return parsed_value
+
+
+def _parse_history_datetime(raw_value: Optional[str]) -> Optional[str]:
+    if raw_value in (None, ""):
+        return None
+
+    normalized = raw_value.strip()
+    if not normalized:
+        return None
+
+    candidate = normalized[:-1] + "+00:00" if normalized.endswith("Z") else normalized
+    try:
+        parsed = datetime.fromisoformat(candidate)
+    except ValueError as exc:
+        raise ValueError(f"Invalid ISO-8601 datetime: {raw_value}") from exc
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+
+    return parsed.isoformat().replace("+00:00", "Z")
+
+
+def _normalize_history_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        if value.get("type") == "Point":
+            coordinates = value.get("coordinates")
+            if isinstance(coordinates, list) and len(coordinates) >= 2:
+                return [coordinates[0], coordinates[1]]
+
+        if "object" in value and isinstance(value["object"], str):
+            return value["object"]
+
+        if "value" in value and not isinstance(value["value"], (dict, list)):
+            return value["value"]
+
+    return value
+
+
+def _build_vehicle_history_records(series_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    timestamps = series_data.get("index")
+    attributes = series_data.get("attributes")
+
+    if not isinstance(timestamps, list) or not isinstance(attributes, list):
+        return []
+
+    records: List[Dict[str, Any]] = []
+    for position, timestamp in enumerate(timestamps):
+        record: Dict[str, Any] = {"timestamp": timestamp}
+
+        for attribute in attributes:
+            if not isinstance(attribute, dict):
+                continue
+
+            attr_name = attribute.get("attrName") or attribute.get("name")
+            if not attr_name:
+                continue
+
+            values = attribute.get("values")
+            if isinstance(values, list):
+                if position >= len(values):
+                    continue
+                record[attr_name] = _normalize_history_value(values[position])
+            elif position == 0:
+                record[attr_name] = _normalize_history_value(values)
+
+        records.append(record)
+
+    return records
+
+
+def _build_vehicle_history_payloads(from_date: Optional[str], to_date: Optional[str], vehicle_filter: Optional[str], page: int, page_size: int) -> Dict[str, Any]:
+    available_entities = ql_client.get_available_entities()
+    if isinstance(available_entities, dict):
+        available_entities = available_entities.get("entities", [])
+
+    vehicle_entity_ids = [
+        entity_id
+        for entity_id in available_entities
+        if _is_vehicle_state_entity_id(entity_id)
+    ]
+
+    if vehicle_filter:
+        vehicle_entity_ids = [
+            entity_id
+            for entity_id in vehicle_entity_ids
+            if entity_id == vehicle_filter or entity_id.endswith(f":{vehicle_filter}")
+        ]
+
+    vehicle_histories: List[Dict[str, Any]] = []
+    for entity_id in sorted(vehicle_entity_ids):
+        try:
+            series_data = ql_client.get_time_series(
+                entity_id,
+                attrs=VEHICLE_STATE_HISTORY_WATCHED_ATTRS,
+                from_date=from_date,
+                to_date=to_date,
+                limit=VEHICLE_HISTORY_SAMPLE_LIMIT,
+                offset=0,
+            )
+        except QuantumLeapNotFound:
+            continue
+
+        if not isinstance(series_data, dict):
+            continue
+
+        history_records = _build_vehicle_history_records(series_data)
+        if not history_records:
+            continue
+
+        latest_record = history_records[-1]
+        vehicle_histories.append(
+            {
+                "id": entity_id,
+                "vehicleId": entity_id.split(":")[-1],
+                "latestTimestamp": latest_record.get("timestamp"),
+                "sampleCount": len(history_records),
+                "history": history_records,
+            }
+        )
+
+    total_vehicles = len(vehicle_histories)
+    total_pages = math.ceil(total_vehicles / page_size) if total_vehicles else 0
+    start = (page - 1) * page_size
+    end = start + page_size
+
+    return {
+        "vehicles": vehicle_histories[start:end],
+        "pagination": {
+            "page": page,
+            "pageSize": page_size,
+            "totalVehicles": total_vehicles,
+            "totalPages": total_pages,
+        },
+    }
+
+
 def build_vehicle_state_history_subscription() -> dict:
     """Build the NGSI-LD subscription used to persist VehicleState changes."""
     return {
@@ -477,9 +642,49 @@ def api_current_vehicles():
     return jsonify(vehicles=_build_vehicle_payloads()), 200
 
 
+@app.route('/api/vehicles/history', methods=['GET'])
+def api_vehicle_history():
+    """Return historical VehicleState data grouped by vehicle."""
+    try:
+        page = _parse_history_int(request.args.get("page"), default=1, minimum=1)
+        page_size = _parse_history_int(
+            request.args.get("pageSize"),
+            default=VEHICLE_HISTORY_PAGE_SIZE_DEFAULT,
+            minimum=1,
+            maximum=VEHICLE_HISTORY_PAGE_SIZE_MAX,
+        )
+        from_date = _parse_history_datetime(request.args.get("fromDate"))
+        to_date = _parse_history_datetime(request.args.get("toDate"))
+    except ValueError as exc:
+        return jsonify(error=str(exc)), 400
+
+    vehicle_filter = request.args.get("vehicleId")
+
+    try:
+        payload = _build_vehicle_history_payloads(from_date, to_date, vehicle_filter, page, page_size)
+    except QuantumLeapError as exc:
+        logger.warning("Unable to load historical vehicle data: %s", exc)
+        return jsonify(error="Unable to load historical vehicle data", detail=str(exc)), 502
+
+    return jsonify(
+        vehicles=payload["vehicles"],
+        pagination=payload["pagination"],
+        filters={
+            "fromDate": from_date,
+            "toDate": to_date,
+            "vehicleId": vehicle_filter,
+        },
+    ), 200
+
+
 if __name__ == '__main__':
     logger.info(f"Starting XDEI Backend on {settings.app.flask_host}:{settings.app.flask_port}")
-    ensure_vehicle_state_history_subscription()
+    # Allow skipping the Orion/QuantumLeap subscription bootstrap for local/dev runs
+    skip_bootstrap = os.getenv('SKIP_SUBSCRIPTION_BOOTSTRAP', '').lower() in ('1', 'true', 'yes')
+    if skip_bootstrap:
+        logger.info('Skipping VehicleState historical subscription bootstrap (SKIP_SUBSCRIPTION_BOOTSTRAP set)')
+    else:
+        ensure_vehicle_state_history_subscription()
     app.run(
         host=settings.app.flask_host,
         port=settings.app.flask_port,
