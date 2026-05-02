@@ -4,9 +4,11 @@ XDEI Backend - Flask Application
 Main application entry point with health check and service status endpoints.
 """
 
-from flask import Flask, jsonify
+import time
 from datetime import datetime, timezone
-from clients.orion import OrionClient
+
+from flask import Flask, jsonify
+from clients.orion import OrionClient, OrionClientConflict, OrionClientError
 from clients.quantumleap import QuantumLeapClient
 from clients.mqtt import MQTTClient
 from config import settings
@@ -38,6 +40,70 @@ mqtt_client = MQTTClient(
     timeout=settings.mqtt.timeout,
     keepalive=settings.mqtt.keepalive,
 )
+
+VEHICLE_STATE_HISTORY_SUBSCRIPTION_ID = "urn:ngsi-ld:Subscription:vehicle-state-history"
+VEHICLE_STATE_HISTORY_WATCHED_ATTRS = [
+    "currentPosition",
+    "delaySeconds",
+    "occupancy",
+    "speedKmh",
+    "heading",
+    "status",
+    "trip",
+]
+
+
+def build_vehicle_state_history_subscription() -> dict:
+    """Build the NGSI-LD subscription used to persist VehicleState changes."""
+    return {
+        "id": VEHICLE_STATE_HISTORY_SUBSCRIPTION_ID,
+        "type": "Subscription",
+        "description": "Persist VehicleState changes in QuantumLeap",
+        "entities": [
+            {
+                "type": "VehicleState",
+            }
+        ],
+        "watchedAttributes": VEHICLE_STATE_HISTORY_WATCHED_ATTRS,
+        "notification": {
+            "attributes": VEHICLE_STATE_HISTORY_WATCHED_ATTRS,
+            "endpoint": {
+                "uri": f"{settings.quantumleap.url.rstrip('/')}/v2/notify",
+                "accept": "application/ld+json",
+            },
+        },
+    }
+
+
+def ensure_vehicle_state_history_subscription(max_attempts: int = 30, retry_delay_seconds: int = 2) -> bool:
+    """Ensure the historical subscription exists before the backend starts serving traffic."""
+    subscription = build_vehicle_state_history_subscription()
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            existing_subscriptions = orion_client.get_subscriptions()
+            if any(item.get("id") == subscription["id"] for item in existing_subscriptions):
+                logger.info("VehicleState historical subscription already exists")
+                return False
+
+            orion_client.create_subscription(subscription)
+            logger.info("Created VehicleState historical subscription")
+            return True
+
+        except OrionClientConflict:
+            logger.info("VehicleState historical subscription already exists")
+            return False
+        except OrionClientError as exc:
+            logger.warning(
+                "Attempt %s/%s to create VehicleState historical subscription failed: %s",
+                attempt,
+                max_attempts,
+                exc,
+            )
+            if attempt < max_attempts:
+                time.sleep(retry_delay_seconds)
+
+    raise RuntimeError("Unable to create VehicleState historical subscription")
 
 
 @app.route('/health', methods=['GET'])
@@ -150,6 +216,7 @@ def ping():
 
 if __name__ == '__main__':
     logger.info(f"Starting XDEI Backend on {settings.app.flask_host}:{settings.app.flask_port}")
+    ensure_vehicle_state_history_subscription()
     app.run(
         host=settings.app.flask_host,
         port=settings.app.flask_port,

@@ -8,7 +8,7 @@ Includes automatic retry logic with exponential backoff and proper error handlin
 import json
 from typing import Any, Dict, List, Optional
 import requests
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -26,6 +26,11 @@ class OrionConnectionError(OrionClientError):
 
 class OrionClientNotFound(OrionClientError):
     """Raised when requested entity is not found (404)."""
+    pass
+
+
+class OrionClientConflict(OrionClientError):
+    """Raised when a resource already exists (409)."""
     pass
 
 
@@ -74,6 +79,7 @@ class OrionClient:
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type(OrionConnectionError),
     )
     def _request(
         self,
@@ -97,6 +103,7 @@ class OrionClient:
             requests.HTTPError: For HTTP errors
         """
         url = f"{self.base_url}{path}"
+        response = None
         
         try:
             logger.debug(f"{method} {url}")
@@ -116,9 +123,11 @@ class OrionClient:
             logger.error(f"Connection error to {url}: {e}")
             raise OrionConnectionError(f"Connection failed: {e}") from e
         except requests.exceptions.HTTPError as e:
-            if response.status_code == 404:
-                raise OrionClientNotFound(f"Entity not found: {response.text}") from e
-            logger.error(f"HTTP error {response.status_code}: {response.text}")
+            error_response = getattr(e, "response", None) or response
+            if error_response is not None and error_response.status_code == 404:
+                raise OrionClientNotFound(f"Entity not found: {error_response.text}") from e
+            if error_response is not None:
+                logger.error(f"HTTP error {error_response.status_code}: {error_response.text}")
             raise
     
     def get_entities(
@@ -307,6 +316,96 @@ class OrionClient:
                 # Continue with next batch instead of stopping
         
         return stats
+
+    def get_subscriptions(self) -> List[Dict[str, Any]]:
+        """
+        List subscriptions registered in Orion-LD.
+
+        Returns:
+            List of subscription dicts.
+        """
+        try:
+            response = self._request(
+                "GET",
+                "/ngsi-ld/v1/subscriptions",
+                headers=self._get_headers(),
+            )
+            subscriptions = response.json()
+            logger.info(f"Retrieved {len(subscriptions)} subscriptions")
+            return subscriptions
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON response: {e}")
+            raise OrionClientError(f"Invalid JSON response: {e}") from e
+
+    def create_subscription(self, subscription: Dict[str, Any]) -> str:
+        """
+        Create a subscription in Orion-LD.
+
+        Args:
+            subscription: NGSI-LD subscription dict.
+
+        Returns:
+            Subscription ID.
+
+        Raises:
+            OrionClientError: If creation fails.
+        """
+        if "type" not in subscription:
+            raise OrionClientError("Subscription must include 'type'")
+
+        if subscription.get("type") != "Subscription":
+            raise OrionClientError("Subscription type must be 'Subscription'")
+
+        path = "/ngsi-ld/v1/subscriptions"
+
+        try:
+            response = self._request(
+                "POST",
+                path,
+                headers=self._get_headers(),
+                json=subscription,
+            )
+            location = response.headers.get("Location", "")
+            if location:
+                return location.rstrip("/").split("/")[-1]
+            if "id" in subscription:
+                return subscription["id"]
+            return ""
+
+        except requests.exceptions.HTTPError as e:
+            status_code = getattr(getattr(e, "response", None), "status_code", None)
+            if status_code == 409:
+                raise OrionClientConflict(f"Subscription already exists: {e}") from e
+            logger.error(f"Failed to create subscription: {e}")
+            raise OrionClientError(f"Failed to create subscription: {e}") from e
+
+    def delete_subscription(self, subscription_id: str) -> None:
+        """
+        Delete a subscription from Orion-LD.
+
+        Args:
+            subscription_id: Subscription ID.
+
+        Raises:
+            OrionClientNotFound: If subscription does not exist.
+            OrionClientError: If deletion fails.
+        """
+        path = f"/ngsi-ld/v1/subscriptions/{subscription_id}"
+
+        try:
+            self._request(
+                "DELETE",
+                path,
+                headers=self._get_headers(),
+            )
+            logger.info(f"Deleted subscription {subscription_id}")
+
+        except OrionClientNotFound:
+            raise
+        except requests.exceptions.HTTPError as e:
+            logger.error(f"Failed to delete subscription {subscription_id}: {e}")
+            raise OrionClientError(f"Failed to delete subscription: {e}") from e
     
     def delete_entity(self, entity_id: str) -> None:
         """
