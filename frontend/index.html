@@ -57,6 +57,19 @@
       </div>
     </div>
 
+    <aside id="detail-panel" class="detail-panel detail-panel--empty" aria-live="polite" aria-label="Detalle seleccionado">
+      <div class="detail-panel__header">
+        <div>
+          <div class="detail-panel__eyebrow">Detalle</div>
+          <h2 class="detail-panel__title">Selecciona un vehículo o una parada</h2>
+        </div>
+        <button id="detail-panel-close" class="detail-panel__close" type="button" aria-label="Cerrar panel">×</button>
+      </div>
+      <div id="detail-panel-body" class="detail-panel__body">
+        <p class="detail-panel__empty-state">Haz clic en un vehículo o una parada para ver su información.</p>
+      </div>
+    </aside>
+
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
