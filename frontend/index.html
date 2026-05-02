@@ -1,24 +1,10 @@
 <!doctype html>
 <html lang="es">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>XDEI P3 - Frontend</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="static/css/map.css" />
-  </head>
-  <body>
-    <div id="hud">
-      <div id="map-status" class="hud-pill">Cargando datos de movilidad…</div>
-      <div id="map-legend" class="hud-legend">
-        <span><i class="legend-swatch legend-route"></i>Rutas</span>
-        <span><i class="legend-swatch legend-stop"></i>Paradas</span>
-        <span><i class="legend-swatch legend-vehicle"></i>Vehículos</span>
-      </div>
-    </div>
-    <div id="map"></div>
-
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+      // BACKEND_BASE_URL will be substituted at container start by the Docker entrypoint.
+      // If not substituted, it defaults to an empty string (use same-origin).
+      window.BACKEND_BASE_URL = '__BACKEND_BASE_URL__';
+    </script>
     <script>
       (function () {
         if (window.BACKEND_BASE_URL !== undefined) return;

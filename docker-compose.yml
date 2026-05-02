@@ -117,6 +117,8 @@ services:
     image: xdei/frontend:stub
     ports:
       - "8081:80"
+    environment:
+      - BACKEND_BASE_URL=http://backend:8000
 
 volumes:
   crate_data:
