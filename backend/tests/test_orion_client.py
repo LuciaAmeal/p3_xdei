@@ -10,6 +10,7 @@ from clients.orion import (
     OrionClientError,
     OrionConnectionError,
     OrionClientNotFound,
+    OrionClientConflict,
 )
 
 
@@ -185,6 +186,74 @@ class TestOrionClientBatchOperations:
         assert result['total'] == 250
         assert result['batches'] == 3
         assert mock_request.call_count == 3
+
+
+class TestOrionClientSubscriptions:
+    """Test subscription CRUD operations."""
+
+    @patch('clients.orion.requests.Session.request')
+    def test_get_subscriptions(self, mock_request, orion_client, mock_response):
+        """Test listing subscriptions."""
+        subscriptions = [
+            {"id": "sub-1", "type": "Subscription"},
+            {"id": "sub-2", "type": "Subscription"},
+        ]
+        mock_response.json.return_value = subscriptions
+        mock_request.return_value = mock_response
+
+        result = orion_client.get_subscriptions()
+
+        assert result == subscriptions
+        mock_request.assert_called_once()
+
+    @patch('clients.orion.requests.Session.request')
+    def test_create_subscription(self, mock_request, orion_client):
+        """Test creating a subscription returns the subscription ID."""
+        response = Mock()
+        response.status_code = 201
+        response.json.return_value = {}
+        response.headers = {"Location": "http://localhost:1026/ngsi-ld/v1/subscriptions/sub-123"}
+        mock_request.return_value = response
+
+        subscription = {
+            "id": "sub-123",
+            "type": "Subscription",
+            "entities": [{"type": "VehicleState"}],
+            "notification": {"endpoint": {"uri": "http://quantumleap:8668/v2/notify"}},
+        }
+
+        result = orion_client.create_subscription(subscription)
+
+        assert result == "sub-123"
+        mock_request.assert_called_once()
+
+    def test_create_subscription_invalid_type(self, orion_client):
+        """Test subscription validation rejects invalid types."""
+        with pytest.raises(OrionClientError):
+            orion_client.create_subscription({"id": "sub-1", "type": "Device"})
+
+    @patch('clients.orion.requests.Session.request')
+    def test_create_subscription_conflict(self, mock_request, orion_client):
+        """Test subscription conflict is mapped to OrionClientConflict."""
+        import requests
+
+        response = Mock()
+        response.status_code = 409
+        response.text = "Conflict"
+        http_error = requests.exceptions.HTTPError(response=response)
+        mock_request.side_effect = http_error
+
+        with pytest.raises(OrionClientConflict):
+            orion_client.create_subscription({"id": "sub-1", "type": "Subscription"})
+
+    @patch('clients.orion.requests.Session.request')
+    def test_delete_subscription(self, mock_request, orion_client, mock_response):
+        """Test deleting a subscription."""
+        mock_request.return_value = mock_response
+
+        orion_client.delete_subscription("sub-1")
+
+        mock_request.assert_called_once()
 
 
 class TestOrionClientHealthCheck:

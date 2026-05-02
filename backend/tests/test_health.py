@@ -5,7 +5,7 @@ Unit tests for health check endpoint.
 import pytest
 import json
 from unittest.mock import Mock, patch
-from app import app
+from app import app, ensure_vehicle_state_history_subscription, build_vehicle_state_history_subscription
 
 
 @pytest.fixture
@@ -102,3 +102,28 @@ class TestPingEndpoint:
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data['ping'] == 'pong'
+
+
+class TestVehicleStateSubscriptionBootstrap:
+    """Test startup bootstrap for VehicleState historical subscription."""
+
+    @patch('app.orion_client')
+    def test_bootstrap_creates_subscription_when_missing(self, mock_orion):
+        """Should create the subscription if it does not exist yet."""
+        mock_orion.get_subscriptions.return_value = []
+        mock_orion.create_subscription.return_value = build_vehicle_state_history_subscription()['id']
+
+        result = ensure_vehicle_state_history_subscription(max_attempts=1, retry_delay_seconds=0)
+
+        assert result is True
+        mock_orion.create_subscription.assert_called_once()
+
+    @patch('app.orion_client')
+    def test_bootstrap_is_idempotent_when_subscription_exists(self, mock_orion):
+        """Should not create a duplicate subscription if it already exists."""
+        mock_orion.get_subscriptions.return_value = [build_vehicle_state_history_subscription()]
+
+        result = ensure_vehicle_state_history_subscription(max_attempts=1, retry_delay_seconds=0)
+
+        assert result is False
+        mock_orion.create_subscription.assert_not_called()

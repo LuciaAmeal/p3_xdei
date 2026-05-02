@@ -9,7 +9,7 @@ import json
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 import requests
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -75,6 +75,7 @@ class QuantumLeapClient:
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type(QuantumLeapConnectionError),
     )
     def _request(
         self,
@@ -98,6 +99,7 @@ class QuantumLeapClient:
             requests.HTTPError: For HTTP errors
         """
         url = f"{self.base_url}{path}"
+        response = None
         
         try:
             logger.debug(f"{method} {url}")
@@ -117,9 +119,11 @@ class QuantumLeapClient:
             logger.error(f"Connection error to QuantumLeap {url}: {e}")
             raise QuantumLeapConnectionError(f"Connection failed: {e}") from e
         except requests.exceptions.HTTPError as e:
-            if response.status_code == 404:
-                raise QuantumLeapNotFound(f"Data not found: {response.text}") from e
-            logger.error(f"HTTP error {response.status_code}: {response.text}")
+            error_response = getattr(e, "response", None) or response
+            if error_response is not None and error_response.status_code == 404:
+                raise QuantumLeapNotFound(f"Data not found: {error_response.text}") from e
+            if error_response is not None:
+                logger.error(f"HTTP error {error_response.status_code}: {error_response.text}")
             raise
     
     def get_time_series(
