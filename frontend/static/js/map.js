@@ -5,6 +5,7 @@ function initMap() {
   const timelineStatusEl = document.getElementById('timeline-status');
   const timelineRangeEl = document.getElementById('timeline-slider');
   const timelineLabelEl = document.getElementById('timeline-label');
+  const timelineCountEl = document.getElementById('timeline-count');
   const timelinePlayEl = document.getElementById('timeline-play');
   const timelineLiveEl = document.getElementById('timeline-live');
   const dateFromEl = document.getElementById('date-from');
