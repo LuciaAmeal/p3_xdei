@@ -391,3 +391,188 @@ html, body {
 .popup-list li {
   margin: 3px 0;
 }
+
+/* Timeline Filters: Date Range */
+.timeline-panel__filters {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.timeline-filters-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.timeline-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.timeline-filter-label {
+  font: 600 0.75rem/1.1 system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(245, 247, 251, 0.66);
+}
+
+.timeline-filter-input {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f5f7fb;
+  font: 500 0.85rem/1.2 system-ui, sans-serif;
+}
+
+.timeline-filter-input:focus {
+  outline: none;
+  border-color: #ffb020;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.timeline-filter-button {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 0;
+  background: linear-gradient(180deg, #ffcf5a 0%, #ff9f1c 100%);
+  color: #102030;
+  font: 600 0.8rem/1.1 system-ui, sans-serif;
+  cursor: pointer;
+  transition: filter 0.2s ease;
+}
+
+.timeline-filter-button:hover {
+  filter: brightness(1.05);
+}
+
+.timeline-filter-button:disabled {
+  opacity: 0.52;
+  cursor: not-allowed;
+}
+
+/* Timeline Speed Selector */
+.timeline-speed-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.timeline-speed-label {
+  font: 600 0.8rem/1.1 system-ui, sans-serif;
+  color: rgba(245, 247, 251, 0.78);
+  white-space: nowrap;
+}
+
+.timeline-speed-select {
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f5f7fb;
+  font: 600 0.8rem/1.1 system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.timeline-speed-select:focus {
+  outline: none;
+  border-color: #ffb020;
+}
+
+/* Timeline Vehicle Filters */
+.timeline-vehicle-filters {
+  display: grid;
+  gap: 8px;
+}
+
+.timeline-filters-toggle {
+  appearance: none;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f5f7fb;
+  font: 600 0.85rem/1.1 system-ui, sans-serif;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.2s ease;
+}
+
+.timeline-filters-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.toggle-icon {
+  font-size: 0.7rem;
+  transition: transform 0.3s ease;
+  margin-left: 8px;
+}
+
+.timeline-filters-toggle.active .toggle-icon {
+  transform: rotate(180deg);
+}
+
+.timeline-filters-list {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.timeline-filter-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  font: 500 0.85rem/1.2 system-ui, sans-serif;
+  color: #f5f7fb;
+}
+
+.timeline-filter-checkbox:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.timeline-filter-checkbox input {
+  cursor: pointer;
+  accent-color: #ffb020;
+}
+
+/* Responsive Design */
+@media (max-width: 600px) {
+  .timeline-panel {
+    width: calc(100vw - 32px);
+    max-width: 100%;
+  }
+
+  .timeline-filters-row {
+    grid-template-columns: 1fr;
+  }
+
+  .timeline-speed-selector {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .timeline-panel__actions {
+    flex-direction: column;
+  }
+
+  .timeline-button {
+    width: 100%;
+  }
+}
