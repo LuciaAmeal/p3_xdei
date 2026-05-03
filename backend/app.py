@@ -16,6 +16,13 @@ from clients.orion import OrionClient, OrionClientConflict, OrionClientError
 from clients.quantumleap import QuantumLeapClient, QuantumLeapError, QuantumLeapNotFound
 from clients.mqtt import MQTTClient
 from config import settings
+from prediction_service import (
+    PredictionDependencyError,
+    PredictionNotFoundError,
+    PredictionServiceError,
+    PredictionValidationError,
+    StopCrowdPredictor,
+)
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -62,6 +69,16 @@ mqtt_client = MQTTClient(
     port=settings.mqtt.port,
     timeout=settings.mqtt.timeout,
     keepalive=settings.mqtt.keepalive,
+)
+
+prediction_service = StopCrowdPredictor(
+    orion_client=orion_client,
+    ql_client=ql_client,
+    cache_ttl_seconds=settings.prediction.cache_ttl_seconds,
+    model_path=settings.prediction.model_path,
+    model_version=settings.prediction.model_version,
+    default_horizon_minutes=settings.prediction.default_horizon_minutes,
+    history_window_days=settings.prediction.history_window_days,
 )
 
 VEHICLE_STATE_HISTORY_SUBSCRIPTION_ID = "urn:ngsi-ld:Subscription:vehicle-state-history"
@@ -675,6 +692,43 @@ def api_vehicle_history():
             "vehicleId": vehicle_filter,
         },
     ), 200
+
+
+@app.route('/api/predict', methods=['POST'])
+def api_predict():
+    """Predict occupancy for a stop using historical and current context."""
+    payload = request.get_json(silent=True) or {}
+    stop_id = payload.get("stopId") or payload.get("stop_id") or payload.get("stop") or payload.get("id")
+    date_time = payload.get("dateTime") or payload.get("date_time") or payload.get("timestamp")
+    raw_horizon_minutes = payload.get("horizonMinutes")
+    if raw_horizon_minutes in (None, ""):
+        raw_horizon_minutes = payload.get("horizon_minutes")
+
+    try:
+        horizon_minutes = _parse_history_int(
+            str(raw_horizon_minutes) if raw_horizon_minutes not in (None, "") else None,
+            default=settings.prediction.default_horizon_minutes,
+            minimum=1,
+            maximum=24 * 60,
+        )
+        normalized_date_time = _parse_history_datetime(date_time)
+        prediction = prediction_service.predict(
+            stop_id=stop_id,
+            target_datetime=normalized_date_time,
+            horizon_minutes=horizon_minutes,
+        )
+    except (ValueError, PredictionValidationError) as exc:
+        return jsonify(error=str(exc)), 400
+    except PredictionNotFoundError as exc:
+        return jsonify(error=str(exc)), 404
+    except PredictionDependencyError as exc:
+        logger.warning("Prediction dependency error: %s", exc)
+        return jsonify(error="Unable to generate prediction", detail=str(exc)), 502
+    except PredictionServiceError as exc:
+        logger.warning("Prediction service error: %s", exc)
+        return jsonify(error="Unable to generate prediction", detail=str(exc)), 500
+
+    return jsonify(prediction), 200
 
 
 if __name__ == '__main__':
