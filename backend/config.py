@@ -77,6 +77,16 @@ class SimulatorConfig:
     default_speed_factor: float
 
 
+@dataclass
+class PredictionConfig:
+    """Prediction service configuration."""
+    model_path: Optional[str]
+    model_version: str
+    cache_ttl_seconds: int
+    default_horizon_minutes: int
+    history_window_days: int
+
+
 class Settings:
     """Central settings manager."""
     
@@ -129,6 +139,15 @@ class Settings:
         self.simulator = SimulatorConfig(
             publish_interval_seconds=int(os.getenv("SIMULATOR_INTERVAL", "3")),
             default_speed_factor=float(os.getenv("SIMULATOR_SPEED_FACTOR", "1.0")),
+        )
+
+        prediction_model_path = os.getenv("PREDICTION_MODEL_PATH", "").strip() or None
+        self.prediction = PredictionConfig(
+            model_path=prediction_model_path,
+            model_version=os.getenv("PREDICTION_MODEL_VERSION", "heuristic-v1"),
+            cache_ttl_seconds=int(os.getenv("PREDICTION_CACHE_TTL_SECONDS", "900")),
+            default_horizon_minutes=int(os.getenv("PREDICTION_DEFAULT_HORIZON_MINUTES", "30")),
+            history_window_days=int(os.getenv("PREDICTION_HISTORY_WINDOW_DAYS", "14")),
         )
     
     def get_fiware_headers(self) -> dict:
