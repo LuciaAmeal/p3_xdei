@@ -35,10 +35,43 @@
           <span id="timeline-label">Sin histórico disponible</span>
           <span id="timeline-count">0 vehículos</span>
         </div>
+
+        <div class="timeline-panel__filters">
+          <div class="timeline-filters-row">
+            <div class="timeline-filter-group">
+              <label for="date-from" class="timeline-filter-label">Desde</label>
+              <input id="date-from" type="date" class="timeline-filter-input" aria-label="Fecha de inicio" />
+            </div>
+            <div class="timeline-filter-group">
+              <label for="date-to" class="timeline-filter-label">Hasta</label>
+              <input id="date-to" type="date" class="timeline-filter-input" aria-label="Fecha de fin" />
+            </div>
+          </div>
+          <button id="date-filter-apply" type="button" class="timeline-filter-button" aria-label="Aplicar rango de fechas">Aplicar</button>
+        </div>
+
         <input id="timeline-slider" class="timeline-slider" type="range" min="0" max="0" value="0" aria-label="Seleccionar instante histórico" disabled />
         <div class="timeline-panel__actions">
           <button id="timeline-play" type="button" class="timeline-button" disabled>Reproducir</button>
           <button id="timeline-live" type="button" class="timeline-button timeline-button--ghost" disabled>Vista en vivo</button>
+          <div class="timeline-speed-selector">
+            <label for="replay-speed" class="timeline-speed-label">Velocidad:</label>
+            <select id="replay-speed" class="timeline-speed-select" aria-label="Velocidad de reproducción">
+              <option value="0.25">0.25×</option>
+              <option value="0.5">0.5×</option>
+              <option value="1" selected>1×</option>
+              <option value="2">2×</option>
+              <option value="4">4×</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="vehicle-filters" class="timeline-vehicle-filters">
+          <button id="vehicle-filters-toggle" type="button" class="timeline-filters-toggle" aria-label="Expandir/contraer filtros de vehículos">
+            <span>Filtrar vehículos</span>
+            <span class="toggle-icon">▼</span>
+          </button>
+          <div id="vehicle-filters-list" class="timeline-filters-list" style="display: none;"></div>
         </div>
       </section>
 
