@@ -7,6 +7,12 @@ function initMap() {
   const timelineLabelEl = document.getElementById('timeline-label');
   const timelinePlayEl = document.getElementById('timeline-play');
   const timelineLiveEl = document.getElementById('timeline-live');
+  const dateFromEl = document.getElementById('date-from');
+  const dateToEl = document.getElementById('date-to');
+  const dateFilterApplyEl = document.getElementById('date-filter-apply');
+  const replaySpeedEl = document.getElementById('replay-speed');
+  const vehicleFiltersToggleEl = document.getElementById('vehicle-filters-toggle');
+  const vehicleFiltersListEl = document.getElementById('vehicle-filters-list');
   const detailPanelEl = document.getElementById('detail-panel');
   const detailPanelBodyEl = document.getElementById('detail-panel-body');
   const detailPanelTitleEl = detailPanelEl ? detailPanelEl.querySelector('.detail-panel__title') : null;
@@ -39,6 +45,8 @@ function initMap() {
   let replayCursor = 0;
   let replayTimerId = null;
   let replayActive = false;
+  let replayController = null;
+  let vehicleTrails = new Map();
   let currentMapData = {
     routes: [],
     stops: [],
@@ -53,6 +61,7 @@ function initMap() {
     stops: 0,
     vehicles: 0,
   };
+  const baseReplayIntervalMs = 1100;
 
   function setStatus(message) {
     if (statusEl) {
@@ -210,10 +219,17 @@ function initMap() {
   }
 
   function buildReplayIndex(historyVehicles) {
-    replayHistory = [];
-    replayTimestamps = [];
+    // Initialize ReplayController with history data
+    if (typeof ReplayController !== 'undefined') {
+      replayController = new ReplayController(historyVehicles || []);
+    } else {
+      console.warn('ReplayController not available');
+      replayController = null;
+    }
 
-    if (!Array.isArray(historyVehicles) || !historyVehicles.length) {
+    if (!replayController || !Array.isArray(historyVehicles) || !historyVehicles.length) {
+      replayHistory = [];
+      replayTimestamps = [];
       replayCursor = 0;
       setTimelineControlsDisabled(true);
       setTimelineStatus('Sin datos históricos');
@@ -223,32 +239,13 @@ function initMap() {
       if (timelineLabelEl) {
         timelineLabelEl.textContent = 'No hay histórico disponible';
       }
+      clearVehicleTrails();
       return;
     }
 
-    const timestampSet = new Set();
-    replayHistory = historyVehicles
-      .map((vehicle) => {
-        if (!vehicle || !Array.isArray(vehicle.history) || !vehicle.history.length) {
-          return null;
-        }
-
-        const history = vehicle.history
-          .filter((entry) => entry && entry.timestamp)
-          .slice()
-          .sort((left, right) => new Date(left.timestamp) - new Date(right.timestamp));
-
-        history.forEach((entry) => timestampSet.add(entry.timestamp));
-
-        return {
-          id: vehicle.id,
-          vehicleId: vehicle.vehicleId || vehicle.id,
-          history,
-        };
-      })
-      .filter(Boolean);
-
-    replayTimestamps = Array.from(timestampSet).sort((left, right) => new Date(left) - new Date(right));
+    // Use ReplayController to get initial data
+    replayHistory = replayController.getFilteredHistory();
+    replayTimestamps = replayController.getFilteredTimestamps();
     replayCursor = replayTimestamps.length ? replayTimestamps.length - 1 : 0;
     setTimelineControlsDisabled(!replayTimestamps.length);
     setTimelineStatus(replayTimestamps.length ? 'Histórico listo' : 'Sin datos históricos');
@@ -269,6 +266,9 @@ function initMap() {
         ? formatReplayLabel(replayTimestamps[replayCursor])
         : 'No hay histórico disponible';
     }
+
+    // Build vehicle filter checkboxes
+    buildVehicleFilterCheckboxes();
   }
 
   function pickHistoryRecord(history, timestamp) {
@@ -295,6 +295,7 @@ function initMap() {
 
   function buildReplaySnapshot(timestamp) {
     return replayHistory
+      .filter(vehicle => replayController && replayController.isVehicleSelected(vehicle.vehicleId))
       .map((vehicle) => {
         const historyRecord = pickHistoryRecord(vehicle.history, timestamp);
         if (!historyRecord || !Array.isArray(historyRecord.currentPosition)) {
@@ -416,6 +417,11 @@ function initMap() {
 
     renderReplayFrame({ animate: false });
 
+    // Calculate interval based on replay speed
+    const replayInterval = replayController
+      ? replayController.getAdjustedInterval(baseReplayIntervalMs)
+      : baseReplayIntervalMs;
+
     replayTimerId = window.setInterval(function () {
       if (replayCursor >= replayTimestamps.length - 1) {
         stopReplayPlayback();
@@ -423,7 +429,7 @@ function initMap() {
       }
 
       seekReplay(replayCursor + 1, { animate: false });
-    }, 1100);
+    }, replayInterval);
   }
 
   function toggleReplayPlayback() {
@@ -953,6 +959,125 @@ function initMap() {
     pollingController = null;
   }
 
+  function buildVehicleFilterCheckboxes() {
+    if (!vehicleFiltersListEl || !replayController) {
+      return;
+    }
+
+    vehicleFiltersListEl.innerHTML = '';
+    const vehicles = replayController.getAvailableVehicles();
+
+    vehicles.forEach(vehicleId => {
+      const label = document.createElement('label');
+      label.className = 'timeline-filter-checkbox';
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = replayController.isVehicleSelected(vehicleId);
+      checkbox.value = vehicleId;
+
+      checkbox.addEventListener('change', function () {
+        replayController.toggleVehicle(vehicleId);
+        replayTimestamps = replayController.getFilteredTimestamps();
+        if (timelineRangeEl && replayTimestamps.length) {
+          timelineRangeEl.max = replayTimestamps.length - 1;
+          replayCursor = Math.min(replayCursor, replayTimestamps.length - 1);
+          renderReplayFrame({ animate: false });
+        }
+      });
+
+      label.appendChild(checkbox);
+      label.appendChild(document.createTextNode(` ${vehicleId}`));
+      vehicleFiltersListEl.appendChild(label);
+    });
+  }
+
+  function toggleVehicleFiltersPanel() {
+    if (!vehicleFiltersListEl || !vehicleFiltersToggleEl) {
+      return;
+    }
+
+    const isVisible = vehicleFiltersListEl.style.display !== 'none';
+    vehicleFiltersListEl.style.display = isVisible ? 'none' : 'block';
+    vehicleFiltersToggleEl.classList.toggle('active', !isVisible);
+  }
+
+  function drawVehicleTrail(vehicleId, positions, color) {
+    if (!Array.isArray(positions) || positions.length < 2) {
+      return;
+    }
+
+    const latLngs = positions
+      .filter(pos => Array.isArray(pos.currentPosition) && pos.currentPosition.length >= 2)
+      .map(pos => [pos.currentPosition[1], pos.currentPosition[0]]);
+
+    if (latLngs.length < 2) {
+      return;
+    }
+
+    // Remove existing trail if any
+    if (vehicleTrails.has(vehicleId)) {
+      const existingTrail = vehicleTrails.get(vehicleId);
+      if (existingTrail && existingTrail.remove) {
+        vehicleLayer.removeLayer(existingTrail);
+      }
+    }
+
+    // Draw new trail
+    const polyline = L.polyline(latLngs, {
+      color: color || '#ffb020',
+      weight: 2,
+      opacity: 0.5,
+      lineCap: 'round',
+      lineJoin: 'round',
+      dashArray: '5, 5',
+    });
+
+    polyline.addTo(vehicleLayer);
+    vehicleTrails.set(vehicleId, polyline);
+  }
+
+  function clearVehicleTrails() {
+    vehicleTrails.forEach(trail => {
+      if (trail && trail.remove) {
+        vehicleLayer.removeLayer(trail);
+      }
+    });
+    vehicleTrails.clear();
+  }
+
+  function applyDateFilterReplay() {
+    if (!replayController || !dateFromEl || !dateToEl) {
+      return;
+    }
+
+    setTimelineStatus('Recargando histórico con filtros…');
+
+    const fromDate = dateFromEl.value;
+    const toDate = dateToEl.value;
+
+    if (fromDate && toDate && fromDate > toDate) {
+      setTimelineStatus('Error: La fecha inicial debe ser anterior a la final');
+      return;
+    }
+
+    replayController.setDateRange(fromDate || null, toDate || null);
+    replayHistory = replayController.getFilteredHistory();
+    replayTimestamps = replayController.getFilteredTimestamps();
+
+    if (timelineRangeEl && replayTimestamps.length) {
+      timelineRangeEl.max = replayTimestamps.length - 1;
+      replayCursor = 0;
+      timelineRangeEl.value = 0;
+    }
+
+    buildVehicleFilterCheckboxes();
+    renderReplayFrame({ animate: false });
+
+    const state = replayController.getFilterState();
+    setTimelineStatus(`${state.filteredVehicleCount} vehículos, ${state.filteredTimestampCount} instantes`);
+  }
+
   function bindTimelineControls() {
     if (timelineRangeEl) {
       timelineRangeEl.addEventListener('input', function () {
@@ -975,6 +1100,25 @@ function initMap() {
       timelineLiveEl.addEventListener('click', function () {
         returnToLiveMode();
       });
+    }
+
+    // Date filter controls
+    if (dateFilterApplyEl) {
+      dateFilterApplyEl.addEventListener('click', applyDateFilterReplay);
+    }
+
+    // Replay speed control
+    if (replaySpeedEl) {
+      replaySpeedEl.addEventListener('change', function () {
+        if (replayController) {
+          replayController.setSpeed(parseFloat(this.value));
+        }
+      });
+    }
+
+    // Vehicle filters toggle
+    if (vehicleFiltersToggleEl) {
+      vehicleFiltersToggleEl.addEventListener('click', toggleVehicleFiltersPanel);
     }
   }
 
