@@ -6,56 +6,55 @@
     <title>XDEI P3 - Frontend</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="static/css/map.css" />
   </head>
   <body>
     <main id="app-shell">
-      <section id="hud" aria-label="Estado del mapa">
+      <section id="hud" aria-label="Estado de la escena 3D">
         <div class="hud-stack">
-          <div class="hud-pill">XDEI P3 · Modo histórico</div>
-          <div id="map-status" class="hud-pill hud-pill--muted">Cargando datos de movilidad…</div>
+          <div class="hud-pill">XDEI P3 · Escena base Three.js</div>
+          <div id="map-status" class="hud-pill hud-pill--muted">Cargando terreno, edificios y cámara…</div>
         </div>
-        <div class="hud-legend" aria-label="Leyenda">
-          <span><i class="legend-swatch legend-route"></i> Rutas</span>
-          <span><i class="legend-swatch legend-stop"></i> Paradas</span>
-          <span><i class="legend-swatch legend-vehicle"></i> Vehículos</span>
+        <div class="hud-legend" aria-label="Leyenda de la escena">
+          <span><i class="legend-swatch legend-terrain"></i> Terreno</span>
+          <span><i class="legend-swatch legend-building"></i> Edificios</span>
+          <span><i class="legend-swatch legend-camera"></i> Cámara</span>
         </div>
       </section>
 
-      <section id="timeline-panel" class="timeline-panel" aria-label="Reproducción histórica">
+      <section id="timeline-panel" class="timeline-panel" aria-label="Controles de escena">
         <div class="timeline-panel__header">
           <div>
-            <div class="timeline-panel__eyebrow">Replay</div>
-            <h2 class="timeline-panel__title">Línea temporal</h2>
+            <div class="timeline-panel__eyebrow">Three.js</div>
+            <h2 class="timeline-panel__title">Controles 3D</h2>
           </div>
-          <div class="timeline-panel__status" id="timeline-status">Cargando histórico…</div>
+          <div class="timeline-panel__status" id="timeline-status">Inicializando escena…</div>
         </div>
         <div class="timeline-panel__meta">
-          <span id="timeline-label">Sin histórico disponible</span>
-          <span id="timeline-count">0 vehículos</span>
+          <span id="timeline-label">Arrastra para orbitar</span>
+          <span id="timeline-count">Zoom con rueda</span>
         </div>
 
         <div class="timeline-panel__filters">
           <div class="timeline-filters-row">
             <div class="timeline-filter-group">
-              <label for="date-from" class="timeline-filter-label">Desde</label>
+              <label for="date-from" class="timeline-filter-label">Cámara</label>
               <input id="date-from" type="date" class="timeline-filter-input" aria-label="Fecha de inicio" />
             </div>
             <div class="timeline-filter-group">
-              <label for="date-to" class="timeline-filter-label">Hasta</label>
+              <label for="date-to" class="timeline-filter-label">Vista</label>
               <input id="date-to" type="date" class="timeline-filter-input" aria-label="Fecha de fin" />
             </div>
           </div>
-          <button id="date-filter-apply" type="button" class="timeline-filter-button" aria-label="Aplicar rango de fechas">Aplicar</button>
+          <button id="date-filter-apply" type="button" class="timeline-filter-button" aria-label="Recentrar cámara">Recentrar</button>
         </div>
 
-        <input id="timeline-slider" class="timeline-slider" type="range" min="0" max="0" value="0" aria-label="Seleccionar instante histórico" disabled />
+        <input id="timeline-slider" class="timeline-slider" type="range" min="0" max="0" value="0" aria-label="Control de zoom" disabled />
         <div class="timeline-panel__actions">
-          <button id="timeline-play" type="button" class="timeline-button" disabled>Reproducir</button>
-          <button id="timeline-live" type="button" class="timeline-button timeline-button--ghost" disabled>Vista en vivo</button>
+          <button id="timeline-play" type="button" class="timeline-button" disabled>Orbitar</button>
+          <button id="timeline-live" type="button" class="timeline-button timeline-button--ghost" disabled>Vista inicial</button>
           <div class="timeline-speed-selector">
-            <label for="replay-speed" class="timeline-speed-label">Velocidad:</label>
+            <label for="replay-speed" class="timeline-speed-label">Suavizado:</label>
             <select id="replay-speed" class="timeline-speed-select" aria-label="Velocidad de reproducción">
               <option value="0.25">0.25×</option>
               <option value="0.5">0.5×</option>
@@ -67,15 +66,15 @@
         </div>
 
         <div id="vehicle-filters" class="timeline-vehicle-filters">
-          <button id="vehicle-filters-toggle" type="button" class="timeline-filters-toggle" aria-label="Expandir/contraer filtros de vehículos">
-            <span>Filtrar vehículos</span>
+          <button id="vehicle-filters-toggle" type="button" class="timeline-filters-toggle" aria-label="Expandir/contraer ayuda 3D">
+            <span>Ayuda rápida</span>
             <span class="toggle-icon">▼</span>
           </button>
           <div id="vehicle-filters-list" class="timeline-filters-list" style="display: none;"></div>
         </div>
       </section>
 
-      <div id="map" role="application" aria-label="Mapa de rutas y vehículos"></div>
+      <div id="scene-root" role="application" aria-label="Escena 3D urbana"></div>
 
       <aside id="detail-panel" aria-label="Detalle contextual">
         <div class="detail-panel__header">
@@ -89,20 +88,13 @@
       </aside>
     </main>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <script src="static/js/replay-controller.js"></script>
-    <script src="static/js/api-client.js"></script>
-    <script src="static/js/map.js"></script>
     <script>
       window.addEventListener('DOMContentLoaded', function () {
-        if (typeof window.initMap === 'function') {
-          window.initMap();
+        if (typeof window.initScene3D === 'function') {
+          window.initScene3D();
         }
       });
     </script>
-      <script>
-        window.BACKEND_BASE_URL = '__BACKEND_BASE_URL__';
-      </script>
+    <script type="module" src="static/js/scene3d.js"></script>
   </body>
 </html>
