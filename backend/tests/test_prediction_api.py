@@ -71,3 +71,45 @@ def test_api_predict_maps_missing_stop_to_404(mock_prediction_service):
     assert response.status_code == 404
     payload = response.get_json()
     assert payload["error"] == "Stop not found"
+
+
+@patch("app.prediction_service")
+def test_api_predict_dependency_error_returns_502(mock_prediction_service):
+    from prediction_service import PredictionDependencyError
+
+    mock_prediction_service.predict.side_effect = PredictionDependencyError("Orion unavailable")
+
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        response = client.post("/api/predict", json={"stopId": "urn:ngsi-ld:GtfsStop:s1"})
+
+    assert response.status_code == 502
+    payload = response.get_json()
+    assert "error" in payload
+
+
+@patch("app.prediction_service")
+def test_api_predict_service_error_returns_500(mock_prediction_service):
+    from prediction_service import PredictionServiceError
+
+    mock_prediction_service.predict.side_effect = PredictionServiceError("Internal failure")
+
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        response = client.post("/api/predict", json={"stopId": "urn:ngsi-ld:GtfsStop:s1"})
+
+    assert response.status_code == 500
+    payload = response.get_json()
+    assert "error" in payload
+
+
+def test_api_predict_empty_payload_returns_400():
+    from app import app
+
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        response = client.post("/api/predict", json={})
+
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert "error" in payload
