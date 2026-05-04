@@ -36,6 +36,11 @@ function initMap() {
   const vehicleMarkers = new Map();
   const vehicleStates = new Map();
   const vehiclePollingIntervalMs = 2000;
+  const stopPredictionCharts = new Map();
+  const stopPredictionRequests = new Map();
+  const stopPredictionSummaryHorizonMinutes = 30;
+  const stopPredictionSeriesHorizonMinutes = 120;
+  const stopPredictionSeriesStepMinutes = 15;
   const routeIndexByTripId = new Map();
   const routeIndexByStopId = new Map();
   const stopIndexById = new Map();
@@ -153,6 +158,14 @@ function initMap() {
     }
 
     return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function formatPercentageValue(value) {
+    if (typeof value !== 'number' || Number.isNaN(value)) {
+      return 'N/D';
+    }
+
+    return `${Math.max(0, Math.min(100, Math.round(value)))}%`;
   }
 
   function formatReplayLabel(value) {
@@ -478,6 +491,174 @@ function initMap() {
     return `<span class="detail-chip">${escapeHtml(routeLabel(route))}</span>`;
   }
 
+  function destroyStopPredictionChart(stopId) {
+    const existingChart = stopPredictionCharts.get(stopId);
+    if (existingChart && typeof existingChart.destroy === 'function') {
+      existingChart.destroy();
+    }
+
+    stopPredictionCharts.delete(stopId);
+  }
+
+  function renderStopPredictionChart(stopId, popupElement, prediction) {
+    if (!popupElement || !prediction) {
+      return;
+    }
+
+    const root = popupElement.querySelector('[data-stop-prediction-root]');
+    if (!root) {
+      return;
+    }
+
+    const valueEl = root.querySelector('[data-stop-prediction-value]');
+    const statusEl = root.querySelector('[data-stop-prediction-status]');
+    const canvasEl = root.querySelector('.stop-prediction__chart');
+
+    if (valueEl) {
+      valueEl.textContent = formatPercentageValue(prediction.predictedOccupancy);
+    }
+
+    if (statusEl) {
+      const confidence = typeof prediction.confidence === 'number' ? `${Math.round(prediction.confidence * 100)}%` : 'N/D';
+      const stepMinutes = prediction.seriesStepMinutes || prediction.horizonMinutes || stopPredictionSeriesStepMinutes;
+      statusEl.textContent = `Confianza ${confidence} · paso ${stepMinutes} min`;
+    }
+
+    if (!canvasEl || typeof window.Chart === 'undefined') {
+      if (statusEl) {
+        statusEl.textContent = 'El gráfico no está disponible en este navegador.';
+      }
+      return;
+    }
+
+    destroyStopPredictionChart(stopId);
+
+    const series = Array.isArray(prediction.series) ? prediction.series : [];
+    const labels = series.map((point) => formatTimeValue(point.timestamp));
+    const values = series.map((point) => (typeof point.predictedOccupancy === 'number' ? point.predictedOccupancy : null));
+
+    const chart = new window.Chart(canvasEl.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Ocupación prevista',
+            data: values,
+            borderColor: '#ffcf5a',
+            backgroundColor: 'rgba(255, 207, 90, 0.14)',
+            borderWidth: 2,
+            tension: 0.35,
+            fill: true,
+            pointRadius: 2,
+            pointHoverRadius: 4,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+          legend: {
+            display: false,
+          },
+          tooltip: {
+            callbacks: {
+              label: function (context) {
+                return ` ${context.parsed.y}%`;
+              },
+            },
+          },
+        },
+        scales: {
+          x: {
+            ticks: {
+              color: 'rgba(245, 247, 251, 0.7)',
+              maxRotation: 0,
+              autoSkip: true,
+            },
+            grid: {
+              color: 'rgba(255, 255, 255, 0.08)',
+            },
+          },
+          y: {
+            beginAtZero: true,
+            suggestedMax: 100,
+            ticks: {
+              color: 'rgba(245, 247, 251, 0.7)',
+              callback: function (value) {
+                return `${value}%`;
+              },
+            },
+            grid: {
+              color: 'rgba(255, 255, 255, 0.08)',
+            },
+          },
+        },
+      },
+    });
+
+    stopPredictionCharts.set(stopId, chart);
+  }
+
+  function loadStopPrediction(stop, popup) {
+    if (!stop || !stop.id || !popup || typeof popup.getElement !== 'function' || !window.MapApiClient || typeof window.MapApiClient.loadStopPredictionSeries !== 'function') {
+      return;
+    }
+
+    const popupElement = popup.getElement();
+    if (!popupElement) {
+      return;
+    }
+
+    const root = popupElement.querySelector('[data-stop-prediction-root]');
+    if (!root) {
+      return;
+    }
+
+    const valueEl = root.querySelector('[data-stop-prediction-value]');
+    const statusEl = root.querySelector('[data-stop-prediction-status]');
+
+    if (valueEl) {
+      valueEl.textContent = 'Cargando…';
+    }
+
+    if (statusEl) {
+      statusEl.textContent = 'Consultando predicción de parada…';
+    }
+
+    let request = stopPredictionRequests.get(stop.id);
+    if (!request) {
+      request = window.MapApiClient.loadStopPredictionSeries(stop.id, {
+        horizonMinutes: stopPredictionSummaryHorizonMinutes,
+        seriesHorizonMinutes: stopPredictionSeriesHorizonMinutes,
+        stepMinutes: stopPredictionSeriesStepMinutes,
+      });
+      stopPredictionRequests.set(stop.id, request);
+    }
+
+    request
+      .then((prediction) => {
+        if (!popupElement.isConnected) {
+          return;
+        }
+
+        renderStopPredictionChart(stop.id, popupElement, prediction);
+      })
+      .catch((error) => {
+        console.warn('Unable to load stop prediction:', error);
+        if (statusEl) {
+          statusEl.textContent = 'No se pudo cargar la predicción.';
+        }
+      })
+      .finally(() => {
+        if (stopPredictionRequests.get(stop.id) === request) {
+          stopPredictionRequests.delete(stop.id);
+        }
+      });
+  }
+
   function renderVehiclePanel(vehicle) {
     const route = findRouteForVehicle(vehicle);
     const currentStop = vehicle.currentStopId ? stopIndexById.get(vehicle.currentStopId) : null;
@@ -709,10 +890,21 @@ function initMap() {
   }
 
   function stopPopup(stop) {
+    const stopId = stop && stop.id ? stop.id : '';
     return `
-      <div class="popup-title">${stop.stopName || 'Parada'}</div>
-      <div class="popup-meta">${stop.stopCode || stop.id}</div>
-      ${stop.stopDesc ? `<div class="popup-meta">${stop.stopDesc}</div>` : ''}
+      <div class="popup-title">${escapeHtml(stop.stopName || 'Parada')}</div>
+      <div class="popup-meta">${escapeHtml(stop.stopCode || stop.id || 'N/D')}</div>
+      ${stop.stopDesc ? `<div class="popup-meta">${escapeHtml(stop.stopDesc)}</div>` : ''}
+      <div class="stop-prediction" data-stop-prediction-root data-stop-id="${escapeHtml(stopId)}">
+        <div class="stop-prediction__summary">
+          <span class="stop-prediction__eyebrow">Próximas 2 horas</span>
+          <span class="stop-prediction__value" data-stop-prediction-value>Predicción en carga…</span>
+        </div>
+        <div class="stop-prediction__meta" data-stop-prediction-status>Abre la parada para ver la curva prevista.</div>
+        <div class="stop-prediction__chart-wrap">
+          <canvas class="stop-prediction__chart" height="170"></canvas>
+        </div>
+      </div>
     `;
   }
 
@@ -772,6 +964,12 @@ function initMap() {
       });
 
       marker.bindPopup(stopPopup(stop));
+      marker.on('popupopen', function (event) {
+        loadStopPrediction(stop, event.popup);
+      });
+      marker.on('popupclose', function () {
+        destroyStopPredictionChart(stop.id);
+      });
       marker.on('click', function () {
         selectStop(stop);
       });

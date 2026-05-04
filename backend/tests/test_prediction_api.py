@@ -113,3 +113,54 @@ def test_api_predict_empty_payload_returns_400():
     assert response.status_code == 400
     payload = response.get_json()
     assert "error" in payload
+
+
+@patch("app.prediction_service")
+def test_api_stop_prediction_returns_series(mock_prediction_service):
+    mock_prediction_service.predict_series.return_value = {
+        "stopId": "urn:ngsi-ld:GtfsStop:s1",
+        "stopName": "Parada 1",
+        "predictedOccupancy": 54,
+        "confidence": 0.76,
+        "validFrom": "2026-05-03T12:00:00Z",
+        "validTo": "2026-05-03T12:30:00Z",
+        "modelVersion": "heuristic-test",
+        "horizonMinutes": 30,
+        "tripIds": ["urn:ngsi-ld:GtfsTrip:t1"],
+        "routeIds": ["urn:ngsi-ld:GtfsRoute:r1"],
+        "sampleCount": 2,
+        "currentSampleCount": 1,
+        "predictionHorizonMinutes": 30,
+        "seriesHorizonMinutes": 120,
+        "seriesStepMinutes": 15,
+        "series": [
+            {"timestamp": "2026-05-03T12:00:00Z", "predictedOccupancy": 54, "confidence": 0.76},
+            {"timestamp": "2026-05-03T12:15:00Z", "predictedOccupancy": 56, "confidence": 0.74},
+        ],
+    }
+
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        response = client.get("/api/stops/urn:ngsi-ld:GtfsStop:s1/prediction?horizonMinutes=30&seriesHorizonMinutes=120&stepMinutes=15")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["predictedOccupancy"] == 54
+    assert payload["seriesStepMinutes"] == 15
+    assert len(payload["series"]) == 2
+    mock_prediction_service.predict_series.assert_called_once()
+
+
+@patch("app.prediction_service")
+def test_api_stop_prediction_rejects_invalid_series_step(mock_prediction_service):
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        response = client.get(
+            "/api/stops/urn:ngsi-ld:GtfsStop:s1/prediction",
+            query_string={"stepMinutes": 0},
+        )
+
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert "error" in payload
+    mock_prediction_service.predict_series.assert_not_called()

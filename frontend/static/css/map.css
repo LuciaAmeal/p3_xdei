@@ -392,6 +392,49 @@ html, body {
   margin: 3px 0;
 }
 
+.stop-prediction {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  min-width: 280px;
+}
+
+.stop-prediction__summary {
+  display: grid;
+  gap: 4px;
+}
+
+.stop-prediction__eyebrow {
+  color: rgba(245, 247, 251, 0.58);
+  font: 700 0.68rem/1.1 system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.stop-prediction__value {
+  font: 700 1.02rem/1.2 system-ui, sans-serif;
+  color: #f5f7fb;
+}
+
+.stop-prediction__meta {
+  color: rgba(245, 247, 251, 0.74);
+  font: 500 0.84rem/1.4 system-ui, sans-serif;
+}
+
+.stop-prediction__chart-wrap {
+  position: relative;
+  height: 170px;
+  padding: 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.stop-prediction__chart {
+  width: 100% !important;
+  height: 100% !important;
+}
+
 /* Timeline Filters: Date Range */
 .timeline-panel__filters {
   display: grid;

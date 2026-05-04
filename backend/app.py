@@ -731,6 +731,50 @@ def api_predict():
     return jsonify(prediction), 200
 
 
+@app.route('/api/stops/<path:stop_id>/prediction', methods=['GET'])
+def api_stop_prediction(stop_id):
+    """Return a short stop prediction plus a 2-hour series for chart rendering."""
+    try:
+        prediction_horizon_minutes = _parse_history_int(
+            request.args.get("horizonMinutes"),
+            default=settings.prediction.default_horizon_minutes,
+            minimum=1,
+            maximum=24 * 60,
+        )
+        series_horizon_minutes = _parse_history_int(
+            request.args.get("seriesHorizonMinutes"),
+            default=120,
+            minimum=1,
+            maximum=24 * 60,
+        )
+        series_step_minutes = _parse_history_int(
+            request.args.get("stepMinutes"),
+            default=15,
+            minimum=1,
+            maximum=series_horizon_minutes,
+        )
+        normalized_date_time = _parse_history_datetime(request.args.get("dateTime") or request.args.get("date_time") or request.args.get("timestamp"))
+        prediction = prediction_service.predict_series(
+            stop_id=stop_id,
+            target_datetime=normalized_date_time,
+            prediction_horizon_minutes=prediction_horizon_minutes,
+            series_horizon_minutes=series_horizon_minutes,
+            series_step_minutes=series_step_minutes,
+        )
+    except (ValueError, PredictionValidationError) as exc:
+        return jsonify(error=str(exc)), 400
+    except PredictionNotFoundError as exc:
+        return jsonify(error=str(exc)), 404
+    except PredictionDependencyError as exc:
+        logger.warning("Prediction dependency error: %s", exc)
+        return jsonify(error="Unable to generate prediction", detail=str(exc)), 502
+    except PredictionServiceError as exc:
+        logger.warning("Prediction service error: %s", exc)
+        return jsonify(error="Unable to generate prediction", detail=str(exc)), 500
+
+    return jsonify(prediction), 200
+
+
 if __name__ == '__main__':
     logger.info(f"Starting XDEI Backend on {settings.app.flask_host}:{settings.app.flask_port}")
     # Allow skipping the Orion/QuantumLeap subscription bootstrap for local/dev runs

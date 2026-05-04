@@ -246,6 +246,65 @@ class StopCrowdPredictor:
         self.cache.set(cache_key, prediction)
         return prediction
 
+    def predict_series(
+        self,
+        stop_id: str,
+        target_datetime: Optional[str] = None,
+        prediction_horizon_minutes: Optional[int] = None,
+        series_horizon_minutes: Optional[int] = 120,
+        series_step_minutes: Optional[int] = 15,
+    ) -> Dict[str, Any]:
+        canonical_stop_id = self._normalize_stop_id(stop_id)
+        if not canonical_stop_id:
+            raise PredictionValidationError("stopId is required")
+
+        summary_horizon = self.default_horizon_minutes if prediction_horizon_minutes is None else int(prediction_horizon_minutes)
+        if summary_horizon < 1:
+            raise PredictionValidationError("horizonMinutes must be at least 1")
+
+        series_horizon = 120 if series_horizon_minutes is None else int(series_horizon_minutes)
+        if series_horizon < 1:
+            raise PredictionValidationError("seriesHorizonMinutes must be at least 1")
+
+        step_minutes = 15 if series_step_minutes is None else int(series_step_minutes)
+        if step_minutes < 1:
+            raise PredictionValidationError("seriesStepMinutes must be at least 1")
+
+        step_minutes = min(step_minutes, series_horizon)
+        target_dt = _parse_iso_datetime(target_datetime)
+        summary_prediction = self.predict(
+            stop_id=canonical_stop_id,
+            target_datetime=_format_iso_z(target_dt),
+            horizon_minutes=summary_horizon,
+        )
+
+        series: List[Dict[str, Any]] = []
+        for offset_minutes in range(0, series_horizon + 1, step_minutes):
+            point_dt = target_dt + timedelta(minutes=offset_minutes)
+            point_prediction = self.predict(
+                stop_id=canonical_stop_id,
+                target_datetime=_format_iso_z(point_dt),
+                horizon_minutes=step_minutes,
+            )
+            series.append(
+                {
+                    "timestamp": _format_iso_z(point_dt),
+                    "predictedOccupancy": point_prediction["predictedOccupancy"],
+                    "confidence": point_prediction["confidence"],
+                    "validFrom": point_prediction["validFrom"],
+                    "validTo": point_prediction["validTo"],
+                    "horizonMinutes": point_prediction["horizonMinutes"],
+                }
+            )
+
+        return {
+            **summary_prediction,
+            "predictionHorizonMinutes": summary_horizon,
+            "seriesHorizonMinutes": series_horizon,
+            "seriesStepMinutes": step_minutes,
+            "series": series,
+        }
+
     def _try_load_model(self, model_path: Optional[str]) -> None:
         if not model_path:
             return
