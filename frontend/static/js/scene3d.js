@@ -24,6 +24,11 @@ const ROUTE_FALLBACK_PALETTE = [
   '#b45309',
   '#2563eb',
 ];
+const STOP_BASE_COLOR = 0x7f93a9;
+const STOP_HOVER_COLOR = 0xffcf5a;
+const STOP_CYLINDER_RADIUS = 0.8;
+const STOP_CYLINDER_HEIGHT = 5;
+const STOP_CYLINDER_SEGMENTS = 16;
 
 function initScene3D() {
   if (window.__XDEI_SCENE3D_INITIALIZED) {
@@ -185,6 +190,15 @@ function initScene3D() {
   const routeLookup = new Map();
   const vehicleStates = new Map();
   let vehicleManagerUnsubscribe = null;
+
+  // Raycasting and interaction state
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+  const stopStates = new Map();
+  let hoveredObject = null;
+  let hoveredObjectOriginalMaterial = null;
+  let handleMouseMoveListener = null;
+  let handleCanvasClickListener = null;
 
   function setSceneStatus(message) {
     if (statusEl) {
@@ -479,6 +493,76 @@ function initScene3D() {
     });
   }
 
+  function addStops3D(scene, stops) {
+    // Clear previous stops
+    stopStates.forEach((state) => {
+      scene.remove(state.mesh);
+      if (state.material) {
+        state.material.dispose();
+      }
+      if (state.geometry) {
+        state.geometry.dispose();
+      }
+    });
+    stopStates.clear();
+
+    if (!Array.isArray(stops)) {
+      return;
+    }
+
+    stops.forEach((stop) => {
+      if (!stop || !stop.id || !Array.isArray(stop.location) || stop.location.length < 2) {
+        return;
+      }
+
+      const worldPosition = resolveWorldPosition(stop.location);
+      if (!worldPosition) {
+        return;
+      }
+
+      const geometry = new THREE.CylinderGeometry(
+        STOP_CYLINDER_RADIUS,
+        STOP_CYLINDER_RADIUS,
+        STOP_CYLINDER_HEIGHT,
+        STOP_CYLINDER_SEGMENTS
+      );
+      const material = new THREE.MeshStandardMaterial({
+        color: STOP_BASE_COLOR,
+        roughness: 0.6,
+        metalness: 0.2,
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.copy(worldPosition);
+      mesh.position.y = STOP_CYLINDER_HEIGHT / 2;
+      mesh.userData = {
+        stopId: String(stop.id),
+        type: 'stop',
+        stopData: stop,
+      };
+
+      scene.add(mesh);
+      stopStates.set(String(stop.id), {
+        id: String(stop.id),
+        mesh,
+        material,
+        geometry,
+        originalMaterial: material,
+        isHovered: false,
+      });
+    });
+  }
+
+  function removeMissingVehicles(seenVehicleIds) {
+    vehicleStates.forEach((state, vehicleId) => {
+      if (seenVehicleIds.has(vehicleId)) {
+        return;
+      }
+
+      scene.remove(state.mesh);
+      vehicleStates.delete(vehicleId);
+    });
+  }
+
   function syncVehicles(vehicles, sourceLabel) {
     const now = performance.now();
     const seenVehicleIds = new Set();
@@ -523,6 +607,125 @@ function initScene3D() {
     return window.VehicleManager;
   }
 
+  function updateMouseCoordinates(event) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  }
+
+  function performRaycast() {
+    raycaster.setFromCamera(mouse, camera);
+
+    // Collect all interactive objects
+    const interactiveObjects = [];
+    vehicleStates.forEach((state) => {
+      interactiveObjects.push(state.mesh);
+    });
+    stopStates.forEach((state) => {
+      interactiveObjects.push(state.mesh);
+    });
+
+    if (interactiveObjects.length === 0) {
+      return null;
+    }
+
+    const intersects = raycaster.intersectObjects(interactiveObjects);
+    return intersects.length > 0 ? intersects[0].object : null;
+  }
+
+  function updateHoverState(raycastedObject) {
+    // Clear previous hover
+    if (hoveredObject && hoveredObject !== raycastedObject) {
+      const prevStopState = stopStates.get(hoveredObject.userData.stopId);
+      if (prevStopState) {
+        prevStopState.mesh.material = prevStopState.originalMaterial;
+        prevStopState.isHovered = false;
+      }
+
+      const prevVehicleData = hoveredObject.userData;
+      if (prevVehicleData && prevVehicleData.bodyMeshes) {
+        prevVehicleData.bodyMeshes.forEach((bodyMesh) => {
+          if (hoveredObjectOriginalMaterial) {
+            bodyMesh.material = hoveredObjectOriginalMaterial;
+          }
+        });
+      }
+    }
+
+    // Apply hover effect to new object
+    if (raycastedObject) {
+      if (raycastedObject.userData.type === 'stop') {
+        const stopState = stopStates.get(raycastedObject.userData.stopId);
+        if (stopState) {
+          const hoverMaterial = new THREE.MeshStandardMaterial({
+            color: STOP_HOVER_COLOR,
+            roughness: 0.4,
+            metalness: 0.4,
+            emissive: STOP_HOVER_COLOR,
+            emissiveIntensity: 0.3,
+          });
+          stopState.mesh.material = hoverMaterial;
+          stopState.isHovered = true;
+        }
+        renderer.domElement.style.cursor = 'pointer';
+      } else if (raycastedObject.userData && raycastedObject.userData.bodyMeshes) {
+        // Vehicle hover
+        const bodyMeshes = raycastedObject.userData.bodyMeshes;
+        hoveredObjectOriginalMaterial = bodyMeshes[0].material;
+
+        bodyMeshes.forEach((bodyMesh) => {
+          const originalColor = new THREE.Color(bodyMesh.material.color);
+          const hoverColor = originalColor.clone().multiplyScalar(1.4);
+          const hoverMaterial = new THREE.MeshStandardMaterial({
+            color: hoverColor,
+            roughness: 0.42,
+            metalness: 0.12,
+            emissive: hoverColor,
+            emissiveIntensity: 0.2,
+          });
+          bodyMesh.material = hoverMaterial;
+        });
+        renderer.domElement.style.cursor = 'pointer';
+      }
+    } else {
+      renderer.domElement.style.cursor = 'default';
+    }
+
+    hoveredObject = raycastedObject;
+  }
+
+  function handleCanvasClick(event) {
+    if (event.target !== renderer.domElement) {
+      return;
+    }
+
+    updateMouseCoordinates(event);
+    const raycastedObject = performRaycast();
+
+    if (!raycastedObject) {
+      return;
+    }
+
+    if (raycastedObject.userData.type === 'stop') {
+      const stopId = raycastedObject.userData.stopId;
+      if (window.__XDEI_MAP_DATA && Array.isArray(window.__XDEI_MAP_DATA.stops)) {
+        const stop = window.__XDEI_MAP_DATA.stops.find((s) => String(s.id) === stopId);
+        if (stop && typeof window.selectStop === 'function') {
+          window.selectStop(stop);
+        }
+      }
+    } else if (raycastedObject.userData && raycastedObject.userData.type !== 'stop') {
+      // Assume it's a vehicle
+      const vehicleId = raycastedObject.userData.id || raycastedObject.userData.vehicleId;
+      if (vehicleId && window.__XDEI_MAP_DATA && Array.isArray(window.__XDEI_MAP_DATA.vehicles)) {
+        const vehicle = window.__XDEI_MAP_DATA.vehicles.find((v) => String(v.id || v.vehicleId) === String(vehicleId));
+        if (vehicle && typeof window.selectVehicle === 'function') {
+          window.selectVehicle(vehicle);
+        }
+      }
+    }
+  }
+
   function connectVehicleManager() {
     const manager = getVehicleManager();
     if (!manager || typeof manager.subscribe !== 'function') {
@@ -554,8 +757,18 @@ function initScene3D() {
       .then((data) => {
         const routes = data && Array.isArray(data.routes) ? data.routes : [];
         const vehicles = data && Array.isArray(data.vehicles) ? data.vehicles : [];
+        const stops = data && Array.isArray(data.stops) ? data.stops : [];
+
+        // Store map data globally for click handling
+        window.__XDEI_MAP_DATA = {
+          routes,
+          stops,
+          vehicles,
+        };
 
         buildRouteLookup(routes);
+        addStops3D(scene, stops);
+
         const manager = getVehicleManager();
         if (manager && typeof manager.setVehicles === 'function') {
           manager.setVehicles(vehicles, { source: 'bootstrap' });
@@ -572,6 +785,7 @@ function initScene3D() {
       .catch((error) => {
         console.warn('Unable to load map data for 3D scene:', error);
         buildRouteLookup([]);
+        addStops3D(scene, []);
         syncVehicles([], 'fallback');
         connectVehicleManager();
       });
@@ -604,6 +818,11 @@ function initScene3D() {
     animationFrameId = window.requestAnimationFrame(renderFrame);
     pulse += 0.0035;
     controls.update();
+
+    // Update hover state based on current mouse position
+    const raycastedObject = performRaycast();
+    updateHoverState(raycastedObject);
+
     refreshVehicleMeshes(performance.now());
     sunLight.position.x = 170 + Math.sin(pulse * 0.8) * 10;
     sunLight.position.z = 120 + Math.cos(pulse * 0.6) * 10;
@@ -623,6 +842,27 @@ function initScene3D() {
       scene.remove(state.mesh);
     });
     vehicleStates.clear();
+
+    // Clean up stops
+    stopStates.forEach((state) => {
+      scene.remove(state.mesh);
+      if (state.material) {
+        state.material.dispose();
+      }
+      if (state.geometry) {
+        state.geometry.dispose();
+      }
+    });
+    stopStates.clear();
+
+    // Remove event listeners
+    if (handleCanvasClickListener) {
+      renderer.domElement.removeEventListener('click', handleCanvasClickListener);
+    }
+    if (handleMouseMoveListener) {
+      renderer.domElement.removeEventListener('mousemove', handleMouseMoveListener);
+    }
+
     if (resizeObserver) {
       resizeObserver.disconnect();
     }
@@ -630,6 +870,15 @@ function initScene3D() {
   }
 
   window.addEventListener('beforeunload', cleanup, { once: true });
+
+  // Add click and mousemove listeners for 3D interaction
+  handleMouseMoveListener = (event) => {
+    updateMouseCoordinates(event);
+  };
+  handleCanvasClickListener = handleCanvasClick;
+
+  renderer.domElement.addEventListener('click', handleCanvasClickListener);
+  renderer.domElement.addEventListener('mousemove', handleMouseMoveListener);
 
   if (statusEl) {
     statusEl.textContent = 'Escena 3D lista · cargando vehículos coloreados por ruta';
