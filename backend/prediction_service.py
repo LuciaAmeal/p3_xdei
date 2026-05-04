@@ -14,6 +14,11 @@ from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
+try:
+    import joblib  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    joblib = None
+
 
 class PredictionServiceError(Exception):
     """Base exception for prediction service failures."""
@@ -176,9 +181,14 @@ class StopCrowdPredictor:
         self.model_version = model_version
         self.default_horizon_minutes = max(1, int(default_horizon_minutes))
         self.history_window_days = max(1, int(history_window_days))
+        self._model = None
         self._model_metadata = self._load_model_metadata(model_path)
         if self._model_metadata:
+            # If metadata contains explicit version use it, otherwise use file stem
             self.model_version = self._model_metadata.get("modelVersion") or self._model_metadata.get("version") or self.model_version
+        # Attempt to load binary model if provided
+        if model_path:
+            self._try_load_model(model_path)
 
     def predict(
         self,
@@ -198,7 +208,9 @@ class StopCrowdPredictor:
         cache_key = self._cache_key(canonical_stop_id, target_dt, horizon)
         cached_prediction = self.cache.get(cache_key)
         if cached_prediction is not None:
+            logger.debug("Prediction cache hit for %s", cache_key)
             return cached_prediction
+        logger.debug("Prediction cache miss for %s", cache_key)
 
         stop_entity = self._resolve_stop_entity(canonical_stop_id)
         if stop_entity is None:
@@ -233,6 +245,43 @@ class StopCrowdPredictor:
 
         self.cache.set(cache_key, prediction)
         return prediction
+
+    def _try_load_model(self, model_path: Optional[str]) -> None:
+        if not model_path:
+            return
+
+        path = Path(model_path)
+        if not path.exists():
+            logger.info("No prediction model found at %s", path)
+            return
+
+        try:
+            if joblib is not None and path.suffix.lower() in (".pkl", ".joblib"):
+                logger.info("Loading prediction model from %s using joblib", path)
+                self._model = joblib.load(str(path))
+            else:
+                # Fallback to pickle
+                logger.info("Loading prediction model from %s using pickle", path)
+                import pickle
+
+                with path.open("rb") as fh:
+                    self._model = pickle.load(fh)
+
+            # Try to infer version from model object if possible
+            version = None
+            if isinstance(self._model, dict):
+                version = self._model.get("modelVersion") or self._model.get("version")
+            else:
+                version = getattr(self._model, "version", None)
+
+            if version:
+                self.model_version = version
+                self._model_metadata = self._model_metadata or {"modelVersion": version}
+
+            logger.info("Prediction model loaded, version=%s", self.model_version)
+        except Exception as exc:  # pragma: no cover - optional runtime error
+            logger.warning("Failed to load prediction model from %s: %s", model_path, exc)
+            self._model = None
 
     def _cache_key(self, stop_id: str, target_dt: datetime, horizon_minutes: int) -> str:
         return json.dumps(
