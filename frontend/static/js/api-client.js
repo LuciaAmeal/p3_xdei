@@ -195,58 +195,21 @@
       if (!pagination.totalPages || page >= pagination.totalPages) {
         break;
       }
-
-
-          function buildBackendCandidates() {
-            const candidates = [];
-            const configuredBase = resolveBackendBaseUrl();
-
-            if (configuredBase) {
-              candidates.push(configuredBase);
-            }
-
-            if (window.location.protocol !== 'file:') {
-              const host = window.location.hostname;
-              if (host === 'localhost' || host === '127.0.0.1') {
-                candidates.push(`${window.location.protocol}//${host}:8000`);
-                candidates.push(`${window.location.protocol}//${host}:8002`);
-              }
-            } else {
-              candidates.push('http://127.0.0.1:8000');
-              candidates.push('http://127.0.0.1:8002');
-            }
-
-            return Array.from(new Set(candidates.filter(Boolean)));
-          }
-
-          async function fetchJsonFromBase(base, path) {
-            const url = base ? `${base}${path}` : path;
-            const response = await fetch(url, {
-              headers: {
-                Accept: 'application/json',
-              },
-            });
-
-            if (!response.ok) {
-              throw new Error(`Request failed for ${url}: ${response.status}`);
-            }
-
-            return response.json();
-          }
       page += 1;
     }
-            const candidates = buildBackendCandidates();
-            let lastError = null;
 
-            for (const base of candidates) {
-              try {
-                return await fetchJsonFromBase(base, path);
-              } catch (error) {
-                lastError = error;
-              }
+    return {
+      vehicles: collectedVehicles,
+      pagination,
+      filters,
+    };
+  }
+
+  function createVehiclePolling(options) {
+    const settings = options || {};
     const intervalMs = Number.isFinite(settings.intervalMs) && settings.intervalMs > 0 ? settings.intervalMs : 2000;
     const onData = typeof settings.onData === 'function' ? settings.onData : function () {};
-            throw lastError || new Error(`Request failed for ${path}`);
+    const onError = typeof settings.onError === 'function' ? settings.onError : function () {};
 
     let timerId = null;
     let inFlight = false;

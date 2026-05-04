@@ -7,6 +7,23 @@ const DEFAULT_CENTER = {
 };
 
 const BUILDING_PALETTE = [0x96a5b8, 0x7f93a9, 0x9aa2ad, 0xb1b7c1, 0x7e8ca1];
+const VEHICLE_POLL_INTERVAL_MS = 2000;
+const VEHICLE_TRANSITION_MS = 1850;
+const VEHICLE_WORLD_SCALE = 0.03;
+const VEHICLE_BODY_LENGTH = 4.8;
+const VEHICLE_BODY_WIDTH = 2.2;
+const VEHICLE_BODY_HEIGHT = 1.2;
+const VEHICLE_SNAP_DISTANCE = 180;
+const ROUTE_FALLBACK_PALETTE = [
+  '#0b74de',
+  '#ff8a00',
+  '#1f9d55',
+  '#e11d48',
+  '#7c3aed',
+  '#0f766e',
+  '#b45309',
+  '#2563eb',
+];
 
 function initScene3D() {
   if (window.__XDEI_SCENE3D_INITIALIZED) {
@@ -65,15 +82,15 @@ function initScene3D() {
   }
 
   if (timelineStatusEl) {
-    timelineStatusEl.textContent = 'Terreno y edificios en carga';
+    timelineStatusEl.textContent = 'Terreno, edificios y vehículos en carga';
   }
 
   if (timelineLabelEl) {
-    timelineLabelEl.textContent = 'Arrastra para orbitar';
+    timelineLabelEl.textContent = 'Vehículos coloreados por ruta';
   }
 
   if (timelineCountEl) {
-    timelineCountEl.textContent = 'Zoom con rueda';
+    timelineCountEl.textContent = 'Interpolación y heading activos';
   }
 
   [timelineRangeEl, timelinePlayEl, timelineLiveEl, dateFromEl, dateToEl, dateFilterApplyEl, replaySpeedEl, vehicleFiltersToggleEl].forEach((element) => {
@@ -90,9 +107,9 @@ function initScene3D() {
   if (detailPanelEl && detailPanelBodyEl) {
     detailPanelEl.classList.add('detail-panel--empty');
     if (detailPanelTitleEl) {
-      detailPanelTitleEl.textContent = 'Escena base';
+      detailPanelTitleEl.textContent = 'Escena 3D activa';
     }
-    detailPanelBodyEl.innerHTML = '<p class="detail-panel__empty-state">Terreno texturado, edificios con LOD sencillo y cámara orbitable. Usa el ratón para explorar la escena.</p>';
+    detailPanelBodyEl.innerHTML = '<p class="detail-panel__empty-state">Terreno texturado, edificios con LOD sencillo y vehículos 3D coloreados por ruta. Cada vehículo se interpola entre actualizaciones y gira según su heading.</p>';
   }
 
   const renderer = new THREE.WebGLRenderer({
@@ -165,6 +182,397 @@ function initScene3D() {
   addBuildingClusters(scene, groundSize);
   addLandmarks(scene);
 
+  const routeLookup = new Map();
+  const vehicleStates = new Map();
+  let vehiclePolling = null;
+
+  function setSceneStatus(message) {
+    if (statusEl) {
+      statusEl.textContent = message;
+    }
+  }
+
+  function normalizeColor(value, fallback) {
+    if (typeof value !== 'string') {
+      return fallback;
+    }
+
+    const trimmed = value.trim();
+    const hex = trimmed.startsWith('#') ? trimmed.slice(1) : trimmed;
+    if (/^[0-9a-fA-F]{6}$/.test(hex)) {
+      return `#${hex.toLowerCase()}`;
+    }
+
+    return fallback;
+  }
+
+  function hashColor(seed) {
+    const source = String(seed || 'vehicle');
+    let hash = 0;
+
+    for (let index = 0; index < source.length; index += 1) {
+      hash = (hash << 5) - hash + source.charCodeAt(index);
+      hash |= 0;
+    }
+
+    const paletteIndex = Math.abs(hash) % ROUTE_FALLBACK_PALETTE.length;
+    return ROUTE_FALLBACK_PALETTE[paletteIndex];
+  }
+
+  function getRouteColor(route, vehicle) {
+    const fallback = hashColor(vehicle.tripId || vehicle.vehicleId || vehicle.id || 'vehicle');
+    return normalizeColor(route && route.routeColor, fallback);
+  }
+
+  function buildRouteLookup(routes) {
+    routeLookup.clear();
+
+    (Array.isArray(routes) ? routes : []).forEach((route) => {
+      if (!route || !route.id) {
+        return;
+      }
+
+      routeLookup.set(route.id, route);
+      (Array.isArray(route.tripIds) ? route.tripIds : []).forEach((tripId) => {
+        if (tripId) {
+          routeLookup.set(tripId, route);
+        }
+      });
+    });
+  }
+
+  function resolveWorldPosition(position) {
+    if (!Array.isArray(position) || position.length < 2) {
+      return null;
+    }
+
+    const lon = Number(position[0]);
+    const lat = Number(position[1]);
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
+      return null;
+    }
+
+    const metersPerDegreeLat = 110540;
+    const metersPerDegreeLon = 111320 * Math.cos(THREE.MathUtils.degToRad(DEFAULT_CENTER.lat));
+    const x = (lon - DEFAULT_CENTER.lon) * metersPerDegreeLon * VEHICLE_WORLD_SCALE;
+    const z = -((lat - DEFAULT_CENTER.lat) * metersPerDegreeLat * VEHICLE_WORLD_SCALE);
+    return new THREE.Vector3(x, 1.55, z);
+  }
+
+  function resolveVehicleHeading(vehicle) {
+    const heading = Number(vehicle && vehicle.heading);
+    return Number.isFinite(heading) ? heading : 0;
+  }
+
+  function normalizeHeadingDegrees(value) {
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
+
+    let heading = value % 360;
+    if (heading < -180) {
+      heading += 360;
+    }
+    if (heading > 180) {
+      heading -= 360;
+    }
+    return heading;
+  }
+
+  function shortestAngleDegrees(from, to) {
+    return normalizeHeadingDegrees(to - from);
+  }
+
+  function lerpAngleDegrees(from, to, alpha) {
+    return from + shortestAngleDegrees(from, to) * alpha;
+  }
+
+  function createVehicleMaterial(color) {
+    return new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.42,
+      metalness: 0.12,
+      flatShading: false,
+    });
+  }
+
+  const vehicleMaterialCache = new Map();
+
+  function getVehicleMaterial(color) {
+    const normalizedColor = normalizeColor(color, '#0b74de');
+    if (vehicleMaterialCache.has(normalizedColor)) {
+      return vehicleMaterialCache.get(normalizedColor);
+    }
+
+    const material = createVehicleMaterial(normalizedColor);
+    vehicleMaterialCache.set(normalizedColor, material);
+    return material;
+  }
+
+  function createVehicleMesh(color) {
+    const group = new THREE.Group();
+    group.name = 'vehicle-mesh';
+
+    const bodyMaterial = getVehicleMaterial(color);
+    const windowMaterial = new THREE.MeshStandardMaterial({
+      color: 0x192432,
+      roughness: 0.28,
+      metalness: 0.05,
+      transparent: true,
+      opacity: 0.94,
+    });
+    const accentMaterial = new THREE.MeshStandardMaterial({
+      color: 0xe8eef7,
+      roughness: 0.65,
+      metalness: 0.1,
+    });
+    const wheelMaterial = new THREE.MeshStandardMaterial({
+      color: 0x101820,
+      roughness: 0.92,
+      metalness: 0,
+    });
+
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(VEHICLE_BODY_WIDTH, VEHICLE_BODY_HEIGHT, VEHICLE_BODY_LENGTH, 1, 1, 2),
+      bodyMaterial
+    );
+    body.position.y = 0.9;
+    group.add(body);
+
+    const roof = new THREE.Mesh(
+      new THREE.BoxGeometry(VEHICLE_BODY_WIDTH * 0.84, VEHICLE_BODY_HEIGHT * 0.55, VEHICLE_BODY_LENGTH * 0.68),
+      bodyMaterial
+    );
+    roof.position.set(0, 1.5, -0.12);
+    group.add(roof);
+
+    const windshield = new THREE.Mesh(
+      new THREE.BoxGeometry(VEHICLE_BODY_WIDTH * 0.68, VEHICLE_BODY_HEIGHT * 0.34, 0.46),
+      windowMaterial
+    );
+    windshield.position.set(0, 1.28, -VEHICLE_BODY_LENGTH * 0.41);
+    group.add(windshield);
+
+    const frontPanel = new THREE.Mesh(
+      new THREE.BoxGeometry(VEHICLE_BODY_WIDTH * 0.84, VEHICLE_BODY_HEIGHT * 0.24, 0.18),
+      accentMaterial
+    );
+    frontPanel.position.set(0, 0.74, -VEHICLE_BODY_LENGTH * 0.52);
+    group.add(frontPanel);
+
+    const wheelGeometry = new THREE.CylinderGeometry(0.32, 0.32, 0.22, 10);
+    const wheelOffsets = [
+      [-0.9, 0.36, -1.45],
+      [0.9, 0.36, -1.45],
+      [-0.9, 0.36, 1.45],
+      [0.9, 0.36, 1.45],
+    ];
+
+    wheelOffsets.forEach(([x, y, z]) => {
+      const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(x, y, z);
+      group.add(wheel);
+    });
+
+    const headlightGeometry = new THREE.BoxGeometry(0.16, 0.12, 0.08);
+    const headlightOffsets = [-0.55, 0.55];
+    headlightOffsets.forEach((x) => {
+      const light = new THREE.Mesh(headlightGeometry, accentMaterial);
+      light.position.set(x, 0.85, -VEHICLE_BODY_LENGTH * 0.54);
+      group.add(light);
+    });
+
+    group.userData.bodyMeshes = [body, roof];
+    return group;
+  }
+
+  function getVehicleState(vehicleId) {
+    return vehicleStates.get(vehicleId) || null;
+  }
+
+  function sampleStatePosition(state, now) {
+    if (!state) {
+      return new THREE.Vector3();
+    }
+
+    const duration = Math.max(1, state.transitionDuration || 1);
+    const alpha = Math.min(1, Math.max(0, (now - state.transitionStart) / duration));
+    return new THREE.Vector3().copy(state.fromPosition).lerp(state.toPosition, alpha);
+  }
+
+  function sampleStateHeading(state, now) {
+    if (!state) {
+      return 0;
+    }
+
+    const duration = Math.max(1, state.transitionDuration || 1);
+    const alpha = Math.min(1, Math.max(0, (now - state.transitionStart) / duration));
+    return lerpAngleDegrees(state.fromHeading, state.toHeading, alpha);
+  }
+
+  function upsertVehicle(vehicle, now) {
+    if (!vehicle || !vehicle.vehicleId) {
+      return;
+    }
+
+    const vehicleId = String(vehicle.vehicleId);
+    const route = routeLookup.get(vehicle.tripId) || routeLookup.get(vehicle.routeId) || null;
+    const targetColor = getRouteColor(route, vehicle);
+    const targetPosition = resolveWorldPosition(vehicle.currentPosition);
+    const targetHeading = normalizeHeadingDegrees(resolveVehicleHeading(vehicle));
+
+    if (!targetPosition) {
+      return;
+    }
+
+    const existing = getVehicleState(vehicleId);
+    if (!existing) {
+      const mesh = createVehicleMesh(targetColor);
+      mesh.position.copy(targetPosition);
+      mesh.rotation.y = THREE.MathUtils.degToRad(targetHeading);
+      scene.add(mesh);
+
+      vehicleStates.set(vehicleId, {
+        id: vehicleId,
+        mesh,
+        color: targetColor,
+        routeId: route && route.id ? route.id : null,
+        fromPosition: targetPosition.clone(),
+        toPosition: targetPosition.clone(),
+        fromHeading: targetHeading,
+        toHeading: targetHeading,
+        transitionStart: now,
+        transitionDuration: 1,
+      });
+      return;
+    }
+
+    const currentDisplayPosition = sampleStatePosition(existing, now);
+    const currentDisplayHeading = sampleStateHeading(existing, now);
+    const distance = currentDisplayPosition.distanceTo(targetPosition);
+    const transitionDuration = distance > VEHICLE_SNAP_DISTANCE ? 1 : VEHICLE_TRANSITION_MS;
+
+    existing.routeId = route && route.id ? route.id : null;
+    existing.color = targetColor;
+    if (Array.isArray(existing.mesh.userData.bodyMeshes)) {
+      existing.mesh.userData.bodyMeshes.forEach((mesh) => {
+        mesh.material = getVehicleMaterial(targetColor);
+      });
+    }
+    existing.fromPosition = currentDisplayPosition;
+    existing.toPosition = targetPosition.clone();
+    existing.fromHeading = currentDisplayHeading;
+    existing.toHeading = targetHeading;
+    existing.transitionStart = now;
+    existing.transitionDuration = transitionDuration;
+  }
+
+  function removeMissingVehicles(seenVehicleIds) {
+    vehicleStates.forEach((state, vehicleId) => {
+      if (seenVehicleIds.has(vehicleId)) {
+        return;
+      }
+
+      scene.remove(state.mesh);
+      vehicleStates.delete(vehicleId);
+    });
+  }
+
+  function syncVehicles(vehicles, sourceLabel) {
+    const now = performance.now();
+    const seenVehicleIds = new Set();
+
+    (Array.isArray(vehicles) ? vehicles : []).forEach((vehicle) => {
+      if (!vehicle || !vehicle.vehicleId) {
+        return;
+      }
+
+      seenVehicleIds.add(String(vehicle.vehicleId));
+      upsertVehicle(vehicle, now);
+    });
+
+    removeMissingVehicles(seenVehicleIds);
+
+    if (timelineStatusEl) {
+      const count = vehicleStates.size;
+      const suffix = sourceLabel ? ` · ${sourceLabel}` : '';
+      timelineStatusEl.textContent = `${count} vehículos 3D activos${suffix}`;
+    }
+
+    if (timelineCountEl) {
+      timelineCountEl.textContent = `${vehicleStates.size} meshes animados`;
+    }
+  }
+
+  function refreshVehicleMeshes(now) {
+    vehicleStates.forEach((state) => {
+      const nextPosition = sampleStatePosition(state, now);
+      const nextHeading = sampleStateHeading(state, now);
+
+      state.mesh.position.copy(nextPosition);
+      state.mesh.rotation.y = THREE.MathUtils.degToRad(nextHeading);
+    });
+  }
+
+  function startVehiclePolling() {
+    if (!window.MapApiClient || typeof window.MapApiClient.createVehiclePolling !== 'function') {
+      if (timelineStatusEl) {
+        timelineStatusEl.textContent = 'Cliente de datos no disponible';
+      }
+      return;
+    }
+
+    if (vehiclePolling && typeof vehiclePolling.stop === 'function') {
+      vehiclePolling.stop();
+    }
+
+    vehiclePolling = window.MapApiClient.createVehiclePolling({
+      intervalMs: VEHICLE_POLL_INTERVAL_MS,
+      onData: function (vehicles) {
+        syncVehicles(vehicles, 'live');
+      },
+      onError: function (error) {
+        console.warn('Unable to load vehicle positions:', error);
+        if (timelineStatusEl) {
+          timelineStatusEl.textContent = 'No se pudo actualizar la posición de los vehículos';
+        }
+      },
+    });
+
+    vehiclePolling.start();
+  }
+
+  function loadSceneData() {
+    if (!window.MapApiClient || typeof window.MapApiClient.loadMapData !== 'function') {
+      buildRouteLookup([]);
+      syncVehicles([], 'fallback');
+      startVehiclePolling();
+      return;
+    }
+
+    setSceneStatus('Cargando rutas y vehículos…');
+    window.MapApiClient.loadMapData()
+      .then((data) => {
+        const routes = data && Array.isArray(data.routes) ? data.routes : [];
+        const vehicles = data && Array.isArray(data.vehicles) ? data.vehicles : [];
+
+        buildRouteLookup(routes);
+        syncVehicles(vehicles, 'bootstrap');
+        startVehiclePolling();
+
+        if (statusEl) {
+          statusEl.textContent = 'Escena 3D lista · vehículos coloreados por ruta, interpolados y orientados por heading';
+        }
+      })
+      .catch((error) => {
+        console.warn('Unable to load map data for 3D scene:', error);
+        buildRouteLookup([]);
+        syncVehicles([], 'fallback');
+        startVehiclePolling();
+      });
+  }
+
   const resize = () => {
     const width = Math.max(1, container.clientWidth);
     const height = Math.max(1, container.clientHeight);
@@ -192,6 +600,7 @@ function initScene3D() {
     animationFrameId = window.requestAnimationFrame(renderFrame);
     pulse += 0.0035;
     controls.update();
+    refreshVehicleMeshes(performance.now());
     sunLight.position.x = 170 + Math.sin(pulse * 0.8) * 10;
     sunLight.position.z = 120 + Math.cos(pulse * 0.6) * 10;
     renderer.render(scene, camera);
@@ -202,6 +611,14 @@ function initScene3D() {
       window.cancelAnimationFrame(animationFrameId);
       animationFrameId = null;
     }
+    if (vehiclePolling && typeof vehiclePolling.stop === 'function') {
+      vehiclePolling.stop();
+      vehiclePolling = null;
+    }
+    vehicleStates.forEach((state) => {
+      scene.remove(state.mesh);
+    });
+    vehicleStates.clear();
     if (resizeObserver) {
       resizeObserver.disconnect();
     }
@@ -211,9 +628,10 @@ function initScene3D() {
   window.addEventListener('beforeunload', cleanup, { once: true });
 
   if (statusEl) {
-    statusEl.textContent = 'Escena 3D lista · terreno texturado, edificios LOD y cámara orbitable';
+    statusEl.textContent = 'Escena 3D lista · cargando vehículos coloreados por ruta';
   }
 
+  loadSceneData();
   renderFrame();
 }
 
