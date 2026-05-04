@@ -130,3 +130,24 @@ def test_predictor_rejects_unknown_stop():
 
     with pytest.raises(PredictionNotFoundError):
         predictor.predict("urn:ngsi-ld:GtfsStop:missing", "2026-05-03T12:00:00Z", 30)
+
+
+def test_predictor_with_empty_history_returns_heuristic():
+    class NoHistoryQL(StubQLClient):
+        def get_available_entities(self):
+            return []
+
+    predictor = StopCrowdPredictor(StubOrionClient(), NoHistoryQL(), cache_ttl_seconds=60, default_horizon_minutes=30)
+
+    result = predictor.predict("urn:ngsi-ld:GtfsStop:s1", "2026-05-03T12:00:00Z", 30)
+
+    assert result["stopId"] == "urn:ngsi-ld:GtfsStop:s1"
+    assert isinstance(result["predictedOccupancy"], int)
+
+
+def test_predictor_handles_long_horizon():
+    predictor = StopCrowdPredictor(StubOrionClient(), StubQLClient(), cache_ttl_seconds=60)
+
+    # Very long horizon should be accepted but capped by caller validation in app; here we expect no crash
+    result = predictor.predict("urn:ngsi-ld:GtfsStop:s1", "2026-05-03T12:00:00Z", 24 * 60)
+    assert isinstance(result["predictedOccupancy"], int)
