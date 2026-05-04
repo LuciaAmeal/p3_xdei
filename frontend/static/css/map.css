@@ -2,13 +2,26 @@ html, body {
   height: 100%;
   margin: 0;
   padding: 0;
+  overflow: hidden;
   background: linear-gradient(180deg, #0b1220 0%, #101a2d 45%, #18253d 100%);
 }
 
+#scene-root,
 #map {
   width: 100%;
   height: 100vh;
   position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(120, 190, 255, 0.12) 0%, rgba(120, 190, 255, 0) 28%),
+    radial-gradient(circle at 80% 18%, rgba(255, 176, 32, 0.10) 0%, rgba(255, 176, 32, 0) 24%),
+    linear-gradient(180deg, #0a1323 0%, #101d31 100%);
+}
+
+#scene-root canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 #detail-panel {
@@ -324,12 +337,18 @@ html, body {
   background: #4ea1ff;
 }
 
-.legend-stop {
+.legend-stop,
+.legend-building {
   background: #1fc58e;
 }
 
-.legend-vehicle {
+.legend-vehicle,
+.legend-camera {
   background: #ffb020;
+}
+
+.legend-terrain {
+  background: #7bc56f;
 }
 
 .map-marker {
@@ -390,49 +409,6 @@ html, body {
 
 .popup-list li {
   margin: 3px 0;
-}
-
-.stop-prediction {
-  display: grid;
-  gap: 10px;
-  margin-top: 12px;
-  min-width: 280px;
-}
-
-.stop-prediction__summary {
-  display: grid;
-  gap: 4px;
-}
-
-.stop-prediction__eyebrow {
-  color: rgba(245, 247, 251, 0.58);
-  font: 700 0.68rem/1.1 system-ui, sans-serif;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-}
-
-.stop-prediction__value {
-  font: 700 1.02rem/1.2 system-ui, sans-serif;
-  color: #f5f7fb;
-}
-
-.stop-prediction__meta {
-  color: rgba(245, 247, 251, 0.74);
-  font: 500 0.84rem/1.4 system-ui, sans-serif;
-}
-
-.stop-prediction__chart-wrap {
-  position: relative;
-  height: 170px;
-  padding: 10px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.stop-prediction__chart {
-  width: 100% !important;
-  height: 100% !important;
 }
 
 /* Timeline Filters: Date Range */
