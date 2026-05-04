@@ -184,7 +184,7 @@ function initScene3D() {
 
   const routeLookup = new Map();
   const vehicleStates = new Map();
-  let vehiclePolling = null;
+  let vehicleManagerUnsubscribe = null;
 
   function setSceneStatus(message) {
     if (statusEl) {
@@ -515,39 +515,37 @@ function initScene3D() {
     });
   }
 
-  function startVehiclePolling() {
-    if (!window.MapApiClient || typeof window.MapApiClient.createVehiclePolling !== 'function') {
+  function getVehicleManager() {
+    if (typeof window.VehicleManager === 'undefined' || !window.VehicleManager) {
+      return null;
+    }
+
+    return window.VehicleManager;
+  }
+
+  function connectVehicleManager() {
+    const manager = getVehicleManager();
+    if (!manager || typeof manager.subscribe !== 'function') {
       if (timelineStatusEl) {
         timelineStatusEl.textContent = 'Cliente de datos no disponible';
       }
       return;
     }
 
-    if (vehiclePolling && typeof vehiclePolling.stop === 'function') {
-      vehiclePolling.stop();
+    if (typeof vehicleManagerUnsubscribe === 'function') {
+      vehicleManagerUnsubscribe();
     }
 
-    vehiclePolling = window.MapApiClient.createVehiclePolling({
-      intervalMs: VEHICLE_POLL_INTERVAL_MS,
-      onData: function (vehicles) {
-        syncVehicles(vehicles, 'live');
-      },
-      onError: function (error) {
-        console.warn('Unable to load vehicle positions:', error);
-        if (timelineStatusEl) {
-          timelineStatusEl.textContent = 'No se pudo actualizar la posición de los vehículos';
-        }
-      },
+    vehicleManagerUnsubscribe = manager.subscribe(function (vehicles, meta) {
+      const sourceLabel = meta && meta.source ? meta.source : 'live';
+      syncVehicles(vehicles, sourceLabel);
     });
-
-    vehiclePolling.start();
   }
 
   function loadSceneData() {
     if (!window.MapApiClient || typeof window.MapApiClient.loadMapData !== 'function') {
       buildRouteLookup([]);
-      syncVehicles([], 'fallback');
-      startVehiclePolling();
+      connectVehicleManager();
       return;
     }
 
@@ -558,8 +556,14 @@ function initScene3D() {
         const vehicles = data && Array.isArray(data.vehicles) ? data.vehicles : [];
 
         buildRouteLookup(routes);
-        syncVehicles(vehicles, 'bootstrap');
-        startVehiclePolling();
+        const manager = getVehicleManager();
+        if (manager && typeof manager.setVehicles === 'function') {
+          manager.setVehicles(vehicles, { source: 'bootstrap' });
+        } else {
+          syncVehicles(vehicles, 'bootstrap');
+        }
+
+        connectVehicleManager();
 
         if (statusEl) {
           statusEl.textContent = 'Escena 3D lista · vehículos coloreados por ruta, interpolados y orientados por heading';
@@ -569,7 +573,7 @@ function initScene3D() {
         console.warn('Unable to load map data for 3D scene:', error);
         buildRouteLookup([]);
         syncVehicles([], 'fallback');
-        startVehiclePolling();
+        connectVehicleManager();
       });
   }
 
@@ -611,9 +615,9 @@ function initScene3D() {
       window.cancelAnimationFrame(animationFrameId);
       animationFrameId = null;
     }
-    if (vehiclePolling && typeof vehiclePolling.stop === 'function') {
-      vehiclePolling.stop();
-      vehiclePolling = null;
+    if (typeof vehicleManagerUnsubscribe === 'function') {
+      vehicleManagerUnsubscribe();
+      vehicleManagerUnsubscribe = null;
     }
     vehicleStates.forEach((state) => {
       scene.remove(state.mesh);
