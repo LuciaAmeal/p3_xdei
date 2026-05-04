@@ -53,6 +53,7 @@ function initMap() {
   let replayActive = false;
   let replayController = null;
   let vehicleTrails = new Map();
+  let vehicleManagerUnsubscribe = null;
   let currentMapData = {
     routes: [],
     stops: [],
@@ -60,7 +61,6 @@ function initMap() {
   };
 
   let mapFitted = false;
-  let pollingController = null;
   let animationFrameId = null;
   const counters = {
     routes: 0,
@@ -232,6 +232,14 @@ function initMap() {
     });
   }
 
+  function getVehicleManager() {
+    if (typeof window.VehicleManager === 'undefined' || !window.VehicleManager) {
+      return null;
+    }
+
+    return window.VehicleManager;
+  }
+
   function buildReplayIndex(historyVehicles) {
     // Initialize ReplayController with history data
     if (typeof ReplayController !== 'undefined') {
@@ -362,20 +370,12 @@ function initMap() {
     }
   }
 
-  function pauseLivePolling() {
-    if (pollingController) {
-      pollingController.stop();
-      pollingController = null;
-    }
-  }
-
   function enterReplayMode() {
     if (!replayTimestamps.length) {
       return;
     }
 
     replayActive = true;
-    pauseLivePolling();
     setTimelineStatus('Reproducción histórica activa');
     if (timelineLiveEl) {
       timelineLiveEl.textContent = 'Volver a vivo';
@@ -394,7 +394,12 @@ function initMap() {
       timelineLabelEl.textContent = formatReplayLabel(replayTimestamps[replayTimestamps.length - 1]);
     }
 
-    startVehiclePolling();
+    const manager = getVehicleManager();
+    if (manager && typeof manager.getVehicles === 'function') {
+      updateVehicles(manager.getVehicles(), { animate: false });
+    } else if (currentMapData && Array.isArray(currentMapData.vehicles)) {
+      updateVehicles(currentMapData.vehicles, { animate: false });
+    }
   }
 
   function seekReplay(cursor, options) {
@@ -1126,36 +1131,24 @@ function initMap() {
     refreshSelectedDetail();
   }
 
-  function startVehiclePolling() {
-    if (!window.MapApiClient || typeof window.MapApiClient.createVehiclePolling !== 'function') {
+  function connectVehicleManager() {
+    const manager = getVehicleManager();
+    if (!manager || typeof manager.subscribe !== 'function') {
       return;
     }
 
-    if (pollingController && pollingController.isRunning()) {
-      return;
+    if (typeof vehicleManagerUnsubscribe === 'function') {
+      vehicleManagerUnsubscribe();
     }
 
-    pollingController = window.MapApiClient.createVehiclePolling({
-      intervalMs: vehiclePollingIntervalMs,
-      onData: function (vehicles) {
-        updateVehicles(vehicles);
-      },
-      onError: function (error) {
-        console.warn('Vehicle polling failed:', error);
-        refreshStatus('reintentando conexion');
-      },
+    vehicleManagerUnsubscribe = manager.subscribe(function (vehicles, meta) {
+      if (replayActive) {
+        return;
+      }
+
+      const sourceLabel = meta && meta.source ? meta.source : 'live';
+      updateVehicles(vehicles, { animate: sourceLabel !== 'bootstrap' });
     });
-
-    pollingController.start();
-  }
-
-  function stopVehiclePolling() {
-    if (!pollingController) {
-      return;
-    }
-
-    pollingController.stop();
-    pollingController = null;
   }
 
   function buildVehicleFilterCheckboxes() {
@@ -1348,16 +1341,24 @@ function initMap() {
     Promise.allSettled([mapLoader, loadTimelineHistory()])
       .then(function (results) {
         const mapResult = results[0];
+        const manager = getVehicleManager();
 
         if (mapResult.status === 'fulfilled') {
           updateMap(mapResult.value, { fitBounds: true, animate: false });
+          if (manager && typeof manager.setVehicles === 'function' && mapResult.value && Array.isArray(mapResult.value.vehicles)) {
+            manager.setVehicles(mapResult.value.vehicles, { source: 'bootstrap' });
+          }
         } else if (window.MapApiClient && typeof window.MapApiClient.sampleData === 'function') {
-          updateMap(window.MapApiClient.sampleData(), { fitBounds: true, animate: false });
+          const sampleData = window.MapApiClient.sampleData();
+          updateMap(sampleData, { fitBounds: true, animate: false });
+          if (manager && typeof manager.setVehicles === 'function' && sampleData && Array.isArray(sampleData.vehicles)) {
+            manager.setVehicles(sampleData.vehicles, { source: 'bootstrap' });
+          }
           setStatus('Mostrando datos de muestra');
         }
 
         bindTimelineControls();
-        startVehiclePolling();
+        connectVehicleManager();
 
         if (replayTimestamps.length) {
           setTimelineStatus('Usa la línea temporal para reproducir el histórico');
@@ -1366,8 +1367,13 @@ function initMap() {
       .catch(function (error) {
         console.warn('Unable to render map data:', error);
         if (window.MapApiClient && typeof window.MapApiClient.sampleData === 'function') {
-          updateMap(window.MapApiClient.sampleData(), { fitBounds: true, animate: false });
-          startVehiclePolling();
+          const sampleData = window.MapApiClient.sampleData();
+          updateMap(sampleData, { fitBounds: true, animate: false });
+          const manager = getVehicleManager();
+          if (manager && typeof manager.setVehicles === 'function' && sampleData && Array.isArray(sampleData.vehicles)) {
+            manager.setVehicles(sampleData.vehicles, { source: 'bootstrap' });
+          }
+          connectVehicleManager();
         }
         setStatus('Mostrando datos de muestra');
       });
@@ -1378,7 +1384,10 @@ function initMap() {
   });
 
   window.addEventListener('beforeunload', function () {
-    stopVehiclePolling();
+    if (typeof vehicleManagerUnsubscribe === 'function') {
+      vehicleManagerUnsubscribe();
+      vehicleManagerUnsubscribe = null;
+    }
     stopReplayPlayback();
 
     if (animationFrameId !== null) {
