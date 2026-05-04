@@ -107,6 +107,25 @@ def test_predictor_returns_prediction_and_uses_history():
     assert result["routeIds"] == ["urn:ngsi-ld:GtfsRoute:r1"]
 
 
+def test_predictor_returns_series_for_chart_rendering():
+    predictor = StopCrowdPredictor(StubOrionClient(), StubQLClient(), cache_ttl_seconds=60, default_horizon_minutes=30)
+
+    result = predictor.predict_series(
+        "urn:ngsi-ld:GtfsStop:s1",
+        "2026-05-03T12:00:00Z",
+        prediction_horizon_minutes=30,
+        series_horizon_minutes=60,
+        series_step_minutes=15,
+    )
+
+    assert result["stopId"] == "urn:ngsi-ld:GtfsStop:s1"
+    assert result["predictionHorizonMinutes"] == 30
+    assert result["seriesHorizonMinutes"] == 60
+    assert result["seriesStepMinutes"] == 15
+    assert len(result["series"]) == 5
+    assert all("timestamp" in point and "predictedOccupancy" in point for point in result["series"])
+
+
 def test_predictor_uses_cache_for_identical_request():
     orion_client = StubOrionClient()
     ql_client = StubQLClient()

@@ -131,6 +131,18 @@
     return Array.isArray(vehiclesResponse.vehicles) ? vehiclesResponse.vehicles : [];
   }
 
+  async function loadStopPredictionSeries(stopId, options) {
+    const settings = options || {};
+    const query = buildQueryString({
+      dateTime: settings.dateTime,
+      horizonMinutes: settings.horizonMinutes,
+      seriesHorizonMinutes: settings.seriesHorizonMinutes,
+      stepMinutes: settings.stepMinutes,
+    });
+
+    return fetchJson(`/api/stops/${encodeURIComponent(stopId)}/prediction${query ? `?${query}` : ''}`);
+  }
+
   async function loadVehicleHistory(options) {
     const settings = options || {};
     const query = buildQueryString({
@@ -287,6 +299,7 @@
   global.MapApiClient = {
     loadMapData,
     loadCurrentVehicles,
+    loadStopPredictionSeries,
     loadVehicleHistory,
     loadAllVehicleHistory,
     createVehiclePolling,
