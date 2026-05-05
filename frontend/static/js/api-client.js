@@ -85,20 +85,45 @@
     return searchParams.toString();
   }
 
-  async function fetchJson(path) {
+  async function requestJson(path, options) {
+    const settings = options || {};
     const base = resolveBackendBaseUrl();
     const url = base ? `${base}${path}` : path;
-    const response = await fetch(url, {
-      headers: {
+    const headers = Object.assign(
+      {
         Accept: 'application/json',
       },
-    });
+      settings.headers || {},
+    );
+    const requestOptions = {
+      method: settings.method || 'GET',
+      headers,
+    };
 
-    if (!response.ok) {
-      throw new Error(`Request failed for ${url}: ${response.status}`);
+    if (settings.body !== undefined) {
+      requestOptions.body = typeof settings.body === 'string' ? settings.body : JSON.stringify(settings.body);
+      if (!requestOptions.headers['Content-Type'] && !requestOptions.headers['content-type']) {
+        requestOptions.headers['Content-Type'] = 'application/json';
+      }
     }
 
-    return response.json();
+    const response = await fetch(url, requestOptions);
+    const contentType = response.headers.get('content-type') || '';
+    const payload = contentType.includes('application/json') ? await response.json() : await response.text();
+
+    if (!response.ok) {
+      const message = payload && typeof payload === 'object' && payload.error ? payload.error : `Request failed for ${url}: ${response.status}`;
+      const error = new Error(message);
+      error.status = response.status;
+      error.payload = payload;
+      throw error;
+    }
+
+    return payload;
+  }
+
+  async function fetchJson(path) {
+    return requestJson(path, { method: 'GET' });
   }
 
   async function loadMapData() {
@@ -205,6 +230,53 @@
     };
   }
 
+  function buildGamificationHeaders(userId, displayName) {
+    const headers = {};
+    const resolvedUserId = String(userId || '').trim();
+    const resolvedDisplayName = String(displayName || '').trim();
+
+    if (resolvedUserId) {
+      headers['X-User-Id'] = resolvedUserId;
+    }
+
+    if (resolvedDisplayName) {
+      headers['X-User-Name'] = resolvedDisplayName;
+    }
+
+    return headers;
+  }
+
+  async function loadGamificationProfile(userId, options) {
+    const settings = options || {};
+    const resolvedUserId = String(userId || '').trim();
+    if (!resolvedUserId) {
+      throw new Error('userId is required');
+    }
+
+    return requestJson(`/api/user/${encodeURIComponent(resolvedUserId)}/profile`, {
+      method: 'GET',
+      headers: buildGamificationHeaders(resolvedUserId, settings.displayName),
+    });
+  }
+
+  async function recordTrip(payload) {
+    const requestPayload = payload || {};
+    return requestJson('/api/user/record-trip', {
+      method: 'POST',
+      headers: buildGamificationHeaders(requestPayload.userId || requestPayload.user_id, requestPayload.displayName),
+      body: requestPayload,
+    });
+  }
+
+  async function redeemDiscount(payload) {
+    const requestPayload = payload || {};
+    return requestJson('/api/user/redeem', {
+      method: 'POST',
+      headers: buildGamificationHeaders(requestPayload.userId || requestPayload.user_id, requestPayload.displayName),
+      body: requestPayload,
+    });
+  }
+
   function createVehiclePolling(options) {
     const settings = options || {};
     const intervalMs = Number.isFinite(settings.intervalMs) && settings.intervalMs > 0 ? settings.intervalMs : 2000;
@@ -266,6 +338,9 @@
     loadVehicleHistory,
     loadAllVehicleHistory,
     createVehiclePolling,
+    loadGamificationProfile,
+    recordTrip,
+    redeemDiscount,
     sampleData: () => cloneData(SAMPLE_DATA),
   };
 })(window);
