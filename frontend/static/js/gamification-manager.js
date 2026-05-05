@@ -485,6 +485,16 @@
       return;
     }
 
+    // Check if user is authenticated via JWT or has user ID
+    const hasJWT = global.AuthManager && global.AuthManager.isAuthenticated();
+    const hasUserId = getCurrentUserId() !== '';
+
+    // If not authenticated and no user ID, don't initialize gamification yet
+    if (!hasJWT && !hasUserId) {
+      state.ready = true; // Mark ready but don't load UI
+      return;
+    }
+
     dom.panel = document.getElementById('gamification-panel');
     dom.body = document.getElementById('gamification-panel-body');
     dom.status = document.getElementById('gamification-status');
@@ -511,6 +521,34 @@
     return loadProfile(state.userId, state.displayName);
   }
 
+  function reload() {
+    // Reload user data from storage
+    hydrateStateFromStorage();
+    render();
+
+    if (state.userId) {
+      return loadProfile(state.userId, state.displayName);
+    }
+
+    return Promise.resolve();
+  }
+
+  function reset() {
+    // Clear state for logout
+    state.userId = '';
+    state.displayName = '';
+    state.profile = null;
+    state.error = '';
+    state.message = '';
+    state.loading = false;
+
+    // Clear storage
+    setStoredValue(STORAGE_USER_ID_KEY, '');
+    setStoredValue(STORAGE_DISPLAY_NAME_KEY, '');
+
+    render();
+  }
+
   function setUser(userId, displayName) {
     state.userId = String(userId || '').trim();
     state.displayName = String(displayName || '').trim() || state.userId;
@@ -522,6 +560,8 @@
   global.GamificationManager = {
     init,
     refresh,
+    reload,
+    reset,
     setUser,
     loadProfile,
     getState: function () {
