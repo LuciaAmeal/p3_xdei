@@ -59,6 +59,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000"]
