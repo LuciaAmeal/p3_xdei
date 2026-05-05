@@ -554,16 +554,33 @@ def _ngsi_property(value: Any) -> Dict[str, Any]:
 
 
 def _authenticated_user_id() -> Optional[str]:
+    """
+    Extract and validate user ID from request headers.
+    
+    Supports two authentication methods (in order of preference):
+    1. X-User-Id header (for backward compatibility with tests)
+    2. Authorization: Bearer <JWT> header (validates JWT signature)
+    
+    Returns:
+        User ID if authentication is valid, None otherwise
+    """
+    # Try X-User-Id header first (backward compatibility)
     user_id = request.headers.get('X-User-Id')
     if user_id:
         return user_id.strip() or None
 
+    # Try Bearer token (JWT)
     authorization = request.headers.get('Authorization', '').strip()
     if authorization.lower().startswith('bearer '):
         token = authorization[7:].strip()
-        return token or None
-
-    return authorization or None
+        if token:
+            # Import here to avoid circular imports
+            from auth import get_user_id_from_jwt
+            user_id = get_user_id_from_jwt(token)
+            if user_id:
+                return user_id
+    
+    return None
 
 
 def _identity_key(user_id: str) -> str:
