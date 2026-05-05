@@ -1,299 +1,320 @@
-# XDEI P3 — Quick start
+# XDEI P3 - FIWARE Urban Mobility
 
-Este repositorio contiene la orquestación mínima para levantar una pila FIWARE local para desarrollo.
+Repositorio para simular, monitorizar y analizar movilidad urbana con FIWARE y NGSI-LD.
 
-Requisitos:
-- Docker y Docker Compose instalados.
+Este README es la guia principal de arranque y uso local. Para detalle funcional y de modelo:
+- `architecture.md`
+- `data_model.md`
+- `PRD.md`
 
-Arranque rápido:
+## Quick Start
+
+### Requisitos
+
+- Docker + Docker Compose plugin (`docker compose`)
+- Python 3.10+ (solo para scripts locales fuera de contenedores)
+
+### 1) Clonar y entrar al repo
 
 ```bash
-# (opcional) preparar y esperar servicios críticos
-./start.sh
-
-# Levantar toda la pila (en segundo plano opcionalmente)
-docker compose up --build
+git clone <repo-url>
+cd p3_xdei
 ```
 
-Servicios expuestos (puertos locales):
+### 2) Levantar stack completo
+
+```bash
+# Compatibilidad: tambien sirve `docker-compose up --build -d`
+docker compose up --build -d
+```
+
+### 3) Comprobar salud
+
+```bash
+curl http://localhost:8000/health
+```
+
+Respuesta esperada: JSON con `status` y estado por servicio FIWARE.
+
+### 4) Abrir interfaces
+
+- Frontend: http://localhost:8081
+- Backend API: http://localhost:8000
+- Orion-LD: http://localhost:1026
+- IoT Agent JSON: http://localhost:4041
+- QuantumLeap: http://localhost:8668
+- CrateDB admin: http://localhost:4200
+- Grafana: http://localhost:3000
+
+### Servicios y puertos
+
 - Mosquitto MQTT: `1883`
 - Orion-LD: `1026`
 - IoT Agent JSON: `4041`
 - CrateDB: `4200`
 - QuantumLeap: `8668`
 - Grafana: `3000`
-- Backend (stub): `8000` (`/health`)
-- Frontend (stub): `8080`
+- Backend Flask: `8000`
+- Frontend Nginx: `8081`
 
-Grafana se arranca con un datasource de CrateDB ya provisionado, usando el driver PostgreSQL contra `crate:5432` dentro de la red de Docker Compose.
-
-## Dashboards de Grafana (Issue #29)
-
-Tres dashboards operativos se provisionan automáticamente al arrancar Grafana. Estos dashboards consultan directamente la tabla `doc.vehiclestate` en CrateDB, que es poblada por QuantumLeap a partir de cambios en las entidades `VehicleState` de Orion-LD.
-
-**Auto-refresh**: 30 segundos | **Rango temporal por defecto**: últimas 2 horas
-
-### 1. Delays Dashboard
-- URL: `http://localhost:3000/d/delays`
-- **Serie temporal de retraso promedio**: Retraso medio cada minuto
-- **Ranking de máximos por vehículo**: Top 20 vehículos con mayor retraso
-- Caso de uso: Detectar líneas o vehículos con degradación operativa
-
-### 2. Occupancy Dashboard
-- URL: `http://localhost:3000/d/occupancy`
-- **Serie temporal de ocupación**: Ocupación media cada 5 minutos
-- **Tabla por vehículo**: Ocupación máxima y promedio (Top 20)
-- Caso de uso: Identificar paradas o vehículos con saturación
-
-### 3. Volume Dashboard
-- URL: `http://localhost:3000/d/volume`
-- **Volumen de viajes por hora**: Número de viajes activos por franja horaria
-- **Volumen por vehículo**: Distribución de registros (Top 20)
-- Caso de uso: Análisis de demanda y distribución de carga
-
-**Nota**: Para que los paneles muestren datos, es necesario que el simulador esté corriendo y publicando telemetría:
-```bash
-python backend/dynamic_simulator.py --gtfs-zip <archivo.zip>
-```
-
-## Estructura del Backend
-
-El backend Flask está estructurado en módulos especializados para mantener separación de responsabilidades:
-
-### Directorios principales
-
-```
-backend/
-├── app.py                    # Aplicación Flask principal
-├── config.py                 # Configuración centralizada (lee .env)
-├── requirements.txt          # Dependencias Python
-├── clients/                  # Clientes HTTP y MQTT para servicios FIWARE
-│   ├── __init__.py
-│   ├── orion.py             # Cliente Orion-LD (NGSI-LD entities)
-│   ├── quantumleap.py       # Cliente QuantumLeap (series temporales)
-│   └── mqtt.py              # Cliente MQTT (Mosquitto broker)
-├── utils/                    # Utilidades transversales
-│   ├── __init__.py
-│   └── logger.py            # Logging estructurado
-└── tests/                    # Tests unitarios
-    ├── __init__.py
-    ├── test_orion_client.py
-    ├── test_quantumleap_client.py
-    ├── test_mqtt_client.py
-    └── test_health.py
-```
-
-### Configuración
-
-Las variables de entorno se cargan desde `.env` (crear desde `.env.example`):
+### Arranque recomendado para datos de demo
 
 ```bash
-cp .env.example .env
-# Editar .env según tu entorno (localmente usa defaults)
+# 1) Stack
+
+docker compose up --build -d
+
+# 2) Cargar GTFS (primero validar y luego cargar)
+python backend/validate_gtfs.py /ruta/feed.zip
+python backend/load_gtfs.py /ruta/feed.zip --batch-size 100
+
+# 3) (Opcional) Sembrar gamificacion
+python scripts/seed_gamification.py --user-count 8
+
+# 4) Simular telemetria
+python backend/dynamic_simulator.py --gtfs-zip /ruta/feed.zip
 ```
 
-Variables principales:
-- **Orion-LD**: `ORION_HOST`, `ORION_PORT`, `ORION_TIMEOUT`, `ORION_RETRIES`
-- **QuantumLeap**: `QUANTUMLEAP_HOST`, `QUANTUMLEAP_PORT`, `QUANTUMLEAP_TIMEOUT`
-- **MQTT**: `MQTT_HOST`, `MQTT_PORT`, `MQTT_TIMEOUT`, `MQTT_KEEPALIVE`
-- **FIWARE**: `FIWARE_SERVICE`, `FIWARE_SERVICEPATH`
-- **App**: `LOG_LEVEL`, `FLASK_ENV`, `FLASK_HOST`, `FLASK_PORT`
+## Arquitectura
 
-### Clientes disponibles
+El sistema sigue una arquitectura FIWARE en capas:
+- Capa GTFS estatico (`load_gtfs.py` + Orion-LD)
+- Capa dinamica (simulador + MQTT)
+- Ingesta operativa (IoT Agent JSON -> Orion-LD)
+- Historico temporal (QuantumLeap -> CrateDB)
+- API de aplicacion (Flask)
+- Frontend (Leaflet, Three.js)
+- Observabilidad (Grafana)
 
-#### OrionClient (`clients/orion.py`)
+```mermaid
+flowchart LR
+  A[GTFS feed ZIP] --> B[backend/load_gtfs.py]
+  B --> C[Orion-LD]
 
-Cliente HTTP para Orion-LD con reintentos automáticos y retry logic:
+  D[backend/dynamic_simulator.py] --> E[Mosquitto MQTT]
+  E --> F[IoT Agent JSON]
+  F --> C
 
-```python
-from clients.orion import OrionClient
-from config import settings
+  C --> G[QuantumLeap]
+  G --> H[CrateDB]
 
-orion = OrionClient(
-    base_url=settings.orion.url,
-    timeout=settings.orion.timeout,
-    retries=settings.orion.retries,
-    fiware_headers=settings.get_fiware_headers(),
-)
+  C --> I[Backend Flask]
+  G --> I
 
-# Obtener entidades
-entities = orion.get_entities(entity_type="GtfsRoute", limit=10)
-
-# Crear entidad
-entity_id = orion.create_entity({
-    "id": "urn:ngsi-ld:GtfsRoute:route_1",
-    "type": "GtfsRoute",
-    "routeShortName": {"type": "Property", "value": "L1"},
-    "@context": ["https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld"]
-})
-
-# Batch upsert
-stats = orion.batch_upsert(entities_list, batch_size=100)
+  H --> J[Grafana]
+  I --> K[Frontend 2D/3D]
 ```
 
-#### QuantumLeapClient (`clients/quantumleap.py`)
+Arquitectura detallada y flujos extendidos: `architecture.md`.
 
-Cliente para consultar series temporales históricas:
+## API Examples
 
-```python
-from clients.quantumleap import QuantumLeapClient
-from config import settings
-
-ql = QuantumLeapClient(
-    base_url=settings.quantumleap.url,
-    timeout=settings.quantumleap.timeout,
-    retries=settings.quantumleap.retries,
-)
-
-# Consultar series temporales con filtro temporal
-ts_data = ql.get_time_series(
-    entity_id="urn:ngsi-ld:VehicleState:bus_1",
-    attrs=["currentPosition", "speed"],
-    from_date="2024-01-01T00:00:00Z",
-    to_date="2024-01-01T01:00:00Z",
-)
-
-# Listar entidades con histórico
-entities = ql.get_available_entities()
-```
-
-#### MQTTClient (`clients/mqtt.py`)
-
-Cliente para publicar en Mosquitto (estructura base para expansión futura):
-
-```python
-from clients.mqtt import MQTTClient
-from config import settings
-
-mqtt = MQTTClient(
-    host=settings.mqtt.host,
-    port=settings.mqtt.port,
-    timeout=settings.mqtt.timeout,
-    keepalive=settings.mqtt.keepalive,
-)
-
-mqtt.connect()
-
-# Publicar mensaje
-mqtt.publish("vehicle/bus_1/telemetry", {
-    "position": [43.3623, -8.4115],
-    "speed": 15.5,
-    "delay_seconds": 45,
-})
-
-mqtt.disconnect()
-```
-
-### Endpoints actuales
-
-- **`GET /health`** — Estado de salud de servicios FIWARE (respuesta JSON con status por servicio)
-- **`GET /api/ping`** — Simple echo para verificar conectividad
-
-### Testing
-
-Ejecutar tests unitarios:
+Base URL local:
 
 ```bash
-cd backend
-pip install -r requirements.txt
-pytest tests/ -v
-
-# O con coverage:
-pytest tests/ --cov=clients --cov=utils -v
+BASE_URL=http://localhost:8000
 ```
 
-Los tests usan `pytest` y `pytest-mock` para mockear conexiones HTTP y MQTT.
+### 1) Health
 
----
->>>>>>> c9a1d1b (feat: provision Grafana dashboards for delays, occupancy, and volume)
-
-Nota de modelado de datos:
-Las entidades NGSI-LD deben alinearse con los esquemas estándar de `dataModel.UrbanMobility` de FIWARE (PublicTransportStop, PublicTransportRoute, Vehicle, etc.). Consultar `data_model.md`.
-
-## Autenticación para Desarrollo
-
-### Descripción
-
-El backend implementa autenticación JWT mock para desarrollo. Esto permite simular usuarios autenticados sin necesidad de un servidor OAuth2 o sistema de autenticación real.
-
-**Importante**: Esta es **solo para desarrollo**. No usar en producción sin implementar autenticación real.
-
-### Características
-
-- **Tokens JWT** con firma HMAC-SHA256
-- **Expiración**: 24 horas
-- **Credenciales mock**: Acepta cualquier username/password no-vacíos
-- **Backward compatible**: Sigue soportando header `X-User-Id` para tests
-
-### Login
-
-#### Endpoint: POST `/api/login`
-
-**Request**:
 ```bash
-curl -X POST http://localhost:8000/api/login \
+curl "$BASE_URL/health"
+```
+
+### 2) Ping
+
+```bash
+curl "$BASE_URL/api/ping"
+```
+
+### 3) Login (JWT de desarrollo)
+
+```bash
+curl -X POST "$BASE_URL/api/login" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"demo","password":"demo"}'
+```
+
+Guardar token:
+
+```bash
+TOKEN=$(curl -s -X POST "$BASE_URL/api/login" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"demo","password":"demo"}' | python -c 'import sys, json; print(json.load(sys.stdin)["token"])')
+```
+
+### 4) Rutas, paradas y vehiculos actuales
+
+```bash
+curl "$BASE_URL/api/routes"
+curl "$BASE_URL/api/stops"
+curl "$BASE_URL/api/vehicles/current"
+```
+
+### 5) Historico de vehiculos
+
+```bash
+curl "$BASE_URL/api/vehicles/history?page=1&pageSize=20"
+curl "$BASE_URL/api/vehicles/history?fromDate=2026-05-01T00:00:00Z&toDate=2026-05-01T01:00:00Z"
+```
+
+### 6) Prediccion puntual
+
+```bash
+curl -X POST "$BASE_URL/api/predict" \
   -H "Content-Type: application/json" \
   -d '{
-    "username": "test_user",
-    "password": "test_password"
+    "stopId": "urn:ngsi-ld:GtfsStop:s1",
+    "horizonMinutes": 30
   }'
 ```
 
-**Response** (200 OK):
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "user_id": "test_user",
-  "expires_in_hours": 24
-}
-```
-
-### Uso del Token
-
-El token JWT se almacena automáticamente en `localStorage` del navegador bajo la clave `xdei.auth.token`.
-
-Para usar el token en requests subsecuentes, incluir el header `Authorization: Bearer <token>`:
+### 7) Prediccion por parada (serie)
 
 ```bash
-curl -X GET http://localhost:8000/api/user/test_user/profile \
-  -H "Authorization: Bearer <token>"
+curl "$BASE_URL/api/stops/urn:ngsi-ld:GtfsStop:s1/prediction?horizonMinutes=30&seriesHorizonMinutes=120&stepMinutes=15"
 ```
 
-### Frontend
-
-1. **Login**: Formulario de login se muestra automáticamente si no hay token
-2. **Almacenamiento**: Token se guarda en `localStorage` automáticamente
-3. **Inyección automática**: El API client inyecta el Bearer token en todos los requests
-4. **Logout**: Botón "Cerrar sesión" limpia el token y vuelve a mostrar el login
-
-### Puntos de Integración
-
-- **Backend**: `backend/auth.py` - Utilidades JWT
-- **Backend**: `backend/app.py` - Endpoint `/api/login` y validación en `_authenticated_user_id()`
-- **Frontend**: `frontend/static/js/auth-manager.js` - Gestión de token
-- **Frontend**: `frontend/static/js/api-client.js` - Inyección de Bearer token
-- **Frontend**: `frontend/static/js/login-ui.js` - Interfaz de login
-- **Frontend**: `frontend/static/js/gamification-manager.js` - Integración con flujo de autenticación
-
-### Testing
-
-Ejecutar tests de autenticación:
+### 8) Endpoints de usuario/gamificacion (requieren JWT)
 
 ```bash
-# Tests de utilidades JWT
-pytest backend/tests/test_jwt_auth.py -v
+# Perfil
+curl "$BASE_URL/api/user/demo/profile" \
+  -H "Authorization: Bearer $TOKEN"
 
-# Tests del endpoint de login
-pytest backend/tests/test_login_endpoint.py -v
+# Registrar viaje
+curl -X POST "$BASE_URL/api/user/record-trip" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"tripId":"urn:ngsi-ld:GtfsTrip:t1","stopId":"urn:ngsi-ld:GtfsStop:s1"}'
 
-# Tests de endpoints protegidos con JWT
-pytest backend/tests/test_gamification_api.py::TestJWTAuth -v
-
-# Todos los tests
-pytest backend/tests/ -v
+# Canjear puntos
+curl -X POST "$BASE_URL/api/user/redeem" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"discountCode":"DISC-001","pointsCost":50,"discountValue":10}'
 ```
 
-### Variables de Entorno
+## Scripts de datos
 
-- `JWT_SECRET_KEY` (default: `dev-secret-key`) - Clave secreta para firmar tokens
-- `JWT_EXPIRATION_HOURS` (default: `24`) - Horas de validez del token
+### GTFS
+
+Validar feed antes de cargar:
+
+```bash
+python backend/validate_gtfs.py /ruta/feed.zip
+```
+
+Opciones utiles:
+
+```bash
+python backend/validate_gtfs.py /ruta/feed.zip --verbose --validate-ngsi-ld
+python backend/validate_gtfs.py /ruta/feed.zip --json
+```
+
+Cargar feed en Orion-LD:
+
+```bash
+python backend/load_gtfs.py /ruta/feed.zip --batch-size 100
+```
+
+Dry-run sin upsert real:
+
+```bash
+python backend/load_gtfs.py /ruta/feed.zip --dry-run --json
+```
+
+### Dataset ML
+
+Generar dataset desde historico (QuantumLeap + Orion):
+
+```bash
+python scripts/generate_ml_dataset.py \
+  --days-back 7 \
+  --output /tmp/occupancy_dataset.csv
+```
+
+Con muestreo e imputacion:
+
+```bash
+python scripts/generate_ml_dataset.py \
+  --days-back 14 \
+  --output /tmp/occupancy_dataset.csv \
+  --sample-size 5000 \
+  --impute mean
+```
+
+### Entrenamiento de modelo
+
+```bash
+python scripts/train_model.py \
+  --dataset /tmp/occupancy_dataset.csv \
+  --model-output backend/models/occupancy_model.pkl
+```
+
+Con busqueda basica de hiperparametros:
+
+```bash
+python scripts/train_model.py \
+  --dataset /tmp/occupancy_dataset.csv \
+  --model-output backend/models/occupancy_model.pkl \
+  --grid-search
+```
+
+### Seed de gamificacion
+
+Preview sin subir a Orion:
+
+```bash
+python scripts/seed_gamification.py --user-count 8 --dry-run
+```
+
+Subida real:
+
+```bash
+python scripts/seed_gamification.py --user-count 8
+```
+
+Documentacion detallada de scripts:
+- `scripts/GENERATE_ML_DATASET_README.md`
+- `scripts/GAMIFICATION_SEED_README.md`
+
+## Dashboards Grafana
+
+Se provisionan automaticamente al arrancar Grafana:
+- Delays: http://localhost:3000/d/delays
+- Occupancy: http://localhost:3000/d/occupancy
+- Volume: http://localhost:3000/d/volume
+
+Nota: para ver datos, debe haber entidades `VehicleState` actualizandose en Orion-LD y persistidas en CrateDB via QuantumLeap.
+
+## Troubleshooting rapido
+
+### El backend no responde
+
+```bash
+docker compose ps
+docker compose logs backend --tail 100
+```
+
+### Health degradado
+
+- Revisar que Orion-LD (`1026`), QuantumLeap (`8668`) y Mosquitto (`1883`) esten vivos.
+- Comprobar cabeceras FIWARE consistentes entre scripts y backend (`Fiware-Service`, `Fiware-ServicePath`).
+
+### Los dashboards estan vacios
+
+- Verificar simulador activo y publicando telemetria.
+- Verificar bridge MQTT/IoT Agent (`vehicle-bridge`) en ejecucion.
+
+## Flujo GitHub Flow (contribucion)
+
+1. Crear rama desde `main` por issue (`issue-31-readme-docs`).
+2. Implementar cambios pequenos y trazables.
+3. Ejecutar validaciones/document checks.
+4. Commit con mensaje claro.
+5. Push y abrir PR a `main`.
+
+## Licencia
+
+Uso academico / proyecto docente (ajustar segun politica del curso o repositorio).
