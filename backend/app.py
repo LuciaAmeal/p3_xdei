@@ -10,9 +10,10 @@ import time
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from uuid import uuid4
 
 from flask import Flask, jsonify, request, make_response
-from clients.orion import OrionClient, OrionClientConflict, OrionClientError
+from clients.orion import OrionClient, OrionClientConflict, OrionClientError, OrionClientNotFound
 from clients.quantumleap import QuantumLeapClient, QuantumLeapError, QuantumLeapNotFound
 from clients.mqtt import MQTTClient
 from config import settings
@@ -94,6 +95,17 @@ VEHICLE_STATE_HISTORY_WATCHED_ATTRS = [
 VEHICLE_HISTORY_PAGE_SIZE_DEFAULT = 20
 VEHICLE_HISTORY_PAGE_SIZE_MAX = 100
 VEHICLE_HISTORY_SAMPLE_LIMIT = 1000
+NGSI_LD_CONTEXT = [
+    'https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld',
+    'https://smartdatamodels.org/context.jsonld',
+]
+GAMIFICATION_TRIP_POINTS = 10
+GAMIFICATION_NEW_STOP_BONUS = 5
+GAMIFICATION_ACHIEVEMENT_RULES = [
+    (1, 'first_trip'),
+    (5, 'explorer_5'),
+    (10, 'explorer_10'),
+]
 
 
 def _attribute_value(entity: Dict[str, Any], name: str, default: Any = None) -> Any:
@@ -533,6 +545,211 @@ def ensure_vehicle_state_history_subscription(max_attempts: int = 30, retry_dela
     raise RuntimeError("Unable to create VehicleState historical subscription")
 
 
+def _ngsi_property(value: Any) -> Dict[str, Any]:
+    return {
+        'type': 'Property',
+        'value': value,
+    }
+
+
+def _authenticated_user_id() -> Optional[str]:
+    user_id = request.headers.get('X-User-Id')
+    if user_id:
+        return user_id.strip() or None
+
+    authorization = request.headers.get('Authorization', '').strip()
+    if authorization.lower().startswith('bearer '):
+        token = authorization[7:].strip()
+        return token or None
+
+    return authorization or None
+
+
+def _identity_key(user_id: str) -> str:
+    for prefix in ('urn:ngsi-ld:UserProfile:', 'urn:ngsi-ld:User:'):
+        if user_id.startswith(prefix):
+            return user_id[len(prefix):]
+    return user_id
+
+
+def _user_profile_entity_id(user_id: str) -> str:
+    if user_id.startswith('urn:ngsi-ld:UserProfile:'):
+        return user_id
+    return f'urn:ngsi-ld:UserProfile:{user_id}'
+
+
+def _redeemed_discount_entity_id(user_id: str) -> str:
+    return f'urn:ngsi-ld:RedeemedDiscount:{_identity_key(user_id)}:{uuid4().hex}'
+
+
+def _profile_from_entity(entity: Dict[str, Any]) -> Dict[str, Any]:
+    visited_stops = _attribute_value(entity, 'visitedStops', [])
+    if not isinstance(visited_stops, list):
+        visited_stops = []
+
+    achievements = _attribute_value(entity, 'achievements', [])
+    if not isinstance(achievements, list):
+        achievements = []
+
+    redeemed_discounts = _attribute_value(entity, 'redeemedDiscounts', [])
+    if not isinstance(redeemed_discounts, list):
+        redeemed_discounts = []
+
+    entity_id = entity.get('id') if isinstance(entity.get('id'), str) else None
+    return {
+        'id': entity_id,
+        'userId': _identity_key(entity_id) if entity_id else None,
+        'displayName': _attribute_value(entity, 'displayName'),
+        'totalPoints': int(_attribute_value(entity, 'totalPoints', 0) or 0),
+        'visitedStops': visited_stops,
+        'achievements': achievements,
+        'lastActivityAt': _attribute_value(entity, 'lastActivityAt'),
+        'redeemedDiscounts': redeemed_discounts,
+    }
+
+
+def _base_profile_payload(user_id: str, display_name: Optional[str] = None) -> Dict[str, Any]:
+    resolved_display_name = (display_name or user_id).strip() or user_id
+    return {
+        'id': _user_profile_entity_id(user_id),
+        'type': 'UserProfile',
+        '@context': NGSI_LD_CONTEXT,
+        'displayName': _ngsi_property(resolved_display_name),
+        'totalPoints': _ngsi_property(0),
+        'visitedStops': _ngsi_property([]),
+        'achievements': _ngsi_property([]),
+        'lastActivityAt': _ngsi_property(None),
+        'redeemedDiscounts': _ngsi_property([]),
+    }
+
+
+def _build_profile_entity(profile: Dict[str, Any]) -> Dict[str, Any]:
+    user_id = profile.get('userId') or ''
+    return {
+        'id': _user_profile_entity_id(user_id),
+        'type': 'UserProfile',
+        '@context': NGSI_LD_CONTEXT,
+        'displayName': _ngsi_property(profile.get('displayName')),
+        'totalPoints': _ngsi_property(int(profile.get('totalPoints', 0) or 0)),
+        'visitedStops': _ngsi_property(list(profile.get('visitedStops') or [])),
+        'achievements': _ngsi_property(list(profile.get('achievements') or [])),
+        'lastActivityAt': _ngsi_property(profile.get('lastActivityAt')),
+        'redeemedDiscounts': _ngsi_property(list(profile.get('redeemedDiscounts') or [])),
+    }
+
+
+def _compute_gamification_achievements(total_points: int, visited_stops: List[str]) -> List[str]:
+    achievements = []
+    if total_points >= GAMIFICATION_TRIP_POINTS:
+        achievements.append('first_trip')
+    for minimum_visits, achievement_id in GAMIFICATION_ACHIEVEMENT_RULES[1:]:
+        if len(visited_stops) >= minimum_visits:
+            achievements.append(achievement_id)
+    return list(dict.fromkeys(achievements))
+
+
+def _load_user_profile(user_id: str) -> Dict[str, Any]:
+    entity = orion_client.get_entity(_user_profile_entity_id(user_id))
+    if not isinstance(entity, dict):
+        raise OrionClientError('Invalid UserProfile payload')
+    return entity
+
+
+def _ensure_user_profile(user_id: str, display_name: Optional[str] = None) -> Dict[str, Any]:
+    try:
+        return _load_user_profile(user_id)
+    except OrionClientNotFound:
+        entity = _base_profile_payload(user_id, display_name=display_name)
+        orion_client.create_entity(entity)
+        return entity
+
+
+def _save_user_profile(profile: Dict[str, Any]) -> None:
+    entity = _build_profile_entity(profile)
+    try:
+        orion_client.update_entity(
+            entity['id'],
+            {key: value for key, value in entity.items() if key not in {'id', 'type', '@context'}},
+        )
+    except OrionClientNotFound:
+        orion_client.create_entity(entity)
+
+
+def _parse_positive_int(value: Any, field_name: str) -> int:
+    if value in (None, ''):
+        raise ValueError(f'{field_name} is required')
+
+    try:
+        parsed_value = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f'{field_name} must be an integer') from exc
+
+    if parsed_value <= 0:
+        raise ValueError(f'{field_name} must be greater than 0')
+
+    return parsed_value
+
+
+def _parse_optional_datetime(value: Any, field_name: str) -> Optional[str]:
+    if value in (None, ''):
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f'{field_name} must be an ISO-8601 string')
+    try:
+        return _parse_history_datetime(value)
+    except ValueError as exc:
+        raise ValueError(f'{field_name} must be an ISO-8601 string') from exc
+
+
+def _resolve_request_user_id(expected_user_id: Optional[str] = None) -> str:
+    user_id = _authenticated_user_id()
+    if not user_id:
+        raise PermissionError('Missing user authentication')
+
+    if expected_user_id is not None and _identity_key(user_id) != _identity_key(expected_user_id):
+        raise PermissionError('Authenticated user does not match requested profile')
+
+    return user_id
+
+
+def _update_profile_after_trip(profile: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str, Any]:
+    visited_stops = list(profile.get('visitedStops') or [])
+    stop_id = payload.get('stopId') or payload.get('stop_id') or payload.get('stop')
+    bonus_points = 0
+
+    if isinstance(stop_id, str) and stop_id:
+        if stop_id not in visited_stops:
+            visited_stops.append(stop_id)
+            bonus_points = GAMIFICATION_NEW_STOP_BONUS
+
+    total_points = int(profile.get('totalPoints', 0) or 0) + GAMIFICATION_TRIP_POINTS + bonus_points
+    updated_profile = dict(profile)
+    updated_profile['visitedStops'] = visited_stops
+    updated_profile['totalPoints'] = total_points
+    updated_profile['lastActivityAt'] = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+    updated_profile['achievements'] = _compute_gamification_achievements(total_points, visited_stops)
+    return updated_profile
+
+
+def _update_profile_after_redeem(profile: Dict[str, Any], redemption: Dict[str, Any], points_cost: int) -> Dict[str, Any]:
+    current_points = int(profile.get('totalPoints', 0) or 0)
+    if current_points < points_cost:
+        raise ValueError('Insufficient points to redeem discount')
+
+    redeemed_discounts = list(profile.get('redeemedDiscounts') or [])
+    redeemed_discounts.append(redemption)
+
+    updated_profile = dict(profile)
+    updated_profile['totalPoints'] = current_points - points_cost
+    updated_profile['redeemedDiscounts'] = redeemed_discounts
+    updated_profile['lastActivityAt'] = redemption['redeemedAt']
+    updated_profile['achievements'] = _compute_gamification_achievements(
+        updated_profile['totalPoints'],
+        list(profile.get('visitedStops') or []),
+    )
+    return updated_profile
+
+
 @app.route('/health', methods=['GET'])
 def health():
     """
@@ -730,7 +947,6 @@ def api_predict():
 
     return jsonify(prediction), 200
 
-
 @app.route('/api/stops/<path:stop_id>/prediction', methods=['GET'])
 def api_stop_prediction(stop_id):
     """Return a short stop prediction plus a 2-hour series for chart rendering."""
@@ -773,6 +989,118 @@ def api_stop_prediction(stop_id):
         return jsonify(error="Unable to generate prediction", detail=str(exc)), 500
 
     return jsonify(prediction), 200
+
+
+@app.route('/api/user/<user_id>/profile', methods=['GET'])
+def api_user_profile(user_id: str):
+    """Return the authenticated user's gamification profile."""
+    try:
+        _resolve_request_user_id(user_id)
+    except PermissionError as exc:
+        return jsonify(error=str(exc)), 403 if 'match' in str(exc).lower() else 401
+
+    try:
+        entity = _load_user_profile(user_id)
+    except OrionClientNotFound:
+        return jsonify(error='User profile not found'), 404
+    except OrionClientError as exc:
+        logger.warning('Unable to load user profile: %s', exc)
+        return jsonify(error='Unable to load user profile', detail=str(exc)), 502
+
+    return jsonify(_profile_from_entity(entity)), 200
+
+
+@app.route('/api/user/record-trip', methods=['POST'])
+def api_user_record_trip():
+    """Record trip activity for the authenticated user."""
+    payload = request.get_json(silent=True) or {}
+    trip_id = payload.get('tripId') or payload.get('trip_id')
+
+    if not isinstance(trip_id, str) or not trip_id.strip():
+        return jsonify(error='tripId is required'), 400
+
+    try:
+        request_user_id = _resolve_request_user_id(payload.get('userId') or payload.get('user_id'))
+        display_name = request.headers.get('X-User-Name') or payload.get('displayName')
+        profile_entity = _ensure_user_profile(
+            request_user_id,
+            display_name=display_name if isinstance(display_name, str) else None,
+        )
+        profile = _profile_from_entity(profile_entity)
+        updated_profile = _update_profile_after_trip(profile, payload)
+        _save_user_profile(updated_profile)
+    except PermissionError as exc:
+        return jsonify(error=str(exc)), 403 if 'match' in str(exc).lower() else 401
+    except ValueError as exc:
+        return jsonify(error=str(exc)), 400
+    except OrionClientError as exc:
+        logger.warning('Unable to record trip for user profile: %s', exc)
+        return jsonify(error='Unable to record trip', detail=str(exc)), 502
+
+    return jsonify(updated_profile), 200
+
+
+@app.route('/api/user/redeem', methods=['POST'])
+def api_user_redeem():
+    """Redeem points for a virtual discount."""
+    payload = request.get_json(silent=True) or {}
+
+    discount_code = payload.get('discountCode') or payload.get('discount_code') or payload.get('code')
+    if not isinstance(discount_code, str) or not discount_code.strip():
+        return jsonify(error='discountCode is required'), 400
+
+    try:
+        points_cost = _parse_positive_int(
+            payload.get('pointsCost') or payload.get('points_cost') or payload.get('costPoints') or payload.get('cost'),
+            'pointsCost',
+        )
+        discount_value = payload.get('discountValue') or payload.get('discount_value') or payload.get('value')
+        if discount_value in (None, ''):
+            discount_value = 0
+        valid_until = _parse_optional_datetime(payload.get('validUntil') or payload.get('valid_until'), 'validUntil')
+        request_user_id = _resolve_request_user_id(payload.get('userId') or payload.get('user_id'))
+        display_name = request.headers.get('X-User-Name') or payload.get('displayName')
+        profile_entity = _ensure_user_profile(
+            request_user_id,
+            display_name=display_name if isinstance(display_name, str) else None,
+        )
+        profile = _profile_from_entity(profile_entity)
+
+        redeemed_at = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+        redemption = {
+            'discountCode': discount_code,
+            'discountValue': discount_value,
+            'redeemedAt': redeemed_at,
+            'validUntil': valid_until,
+            'status': 'redeemed',
+        }
+        updated_profile = _update_profile_after_redeem(profile, redemption, points_cost)
+        _save_user_profile(updated_profile)
+
+        redemption_entity = {
+            'id': _redeemed_discount_entity_id(request_user_id),
+            'type': 'RedeemedDiscount',
+            '@context': NGSI_LD_CONTEXT,
+            'discountCode': _ngsi_property(discount_code),
+            'discountValue': _ngsi_property(discount_value),
+            'redeemedAt': _ngsi_property(redeemed_at),
+            'validUntil': _ngsi_property(valid_until),
+            'status': _ngsi_property('redeemed'),
+            'belongsToUser': {
+                'type': 'Relationship',
+                'object': _user_profile_entity_id(request_user_id),
+            },
+        }
+        orion_client.create_entity(redemption_entity)
+    except PermissionError as exc:
+        return jsonify(error=str(exc)), 403 if 'match' in str(exc).lower() else 401
+    except ValueError as exc:
+        return jsonify(error=str(exc)), 400 if 'required' in str(exc).lower() or 'must' in str(exc).lower() else 409
+    except OrionClientError as exc:
+        logger.warning('Unable to redeem discount for user profile: %s', exc)
+        return jsonify(error='Unable to redeem discount', detail=str(exc)), 502
+
+    return jsonify({'profile': updated_profile, 'redemption': redemption}), 201
 
 
 if __name__ == '__main__':
