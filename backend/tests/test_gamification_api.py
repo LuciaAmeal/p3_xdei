@@ -249,5 +249,3 @@ def test_api_user_profile_backward_compatibility_x_user_id(mock_orion):
     payload = response.get_json()
     assert payload['userId'] == 'bob'
     assert payload['totalPoints'] == 15
-
-    assert payload['error'] == 'User profile not found'

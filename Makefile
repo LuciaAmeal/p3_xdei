@@ -1,7 +1,7 @@
 PYTEST_FLAGS=-q
-PYTHON := $(shell command -v python3 2>/dev/null || command -v python 2>/dev/null || echo python)
+PYTHON := $(shell command -v python 2>/dev/null || command -v python3 2>/dev/null || echo python)
 
-.PHONY: test test-integration test-integration-run test-all
+.PHONY: test test-integration test-all
 
 test:
 	$(PYTHON) -m pytest -m "not integration" $(PYTEST_FLAGS)
@@ -13,10 +13,5 @@ test-integration:
 	if [ -x ./start.sh ]; then ./start.sh || true; fi
 	$(PYTHON) -m pytest -m integration $(PYTEST_FLAGS)
 	docker compose down
-
-test-integration-run:
-	# Run integration tests only (assumes services are already running via docker compose)
-	# Used in CI/CD pipelines where docker-compose is managed separately
-	$(PYTHON) -m pytest -m integration $(PYTEST_FLAGS)
 
 test-all: test test-integration
