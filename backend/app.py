@@ -12,7 +12,9 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from flask import Flask, jsonify, request, make_response
+from flask import Flask, jsonify, request, make_response, g
+import concurrent.futures
+import requests
 from clients.orion import OrionClient, OrionClientConflict, OrionClientError, OrionClientNotFound
 from clients.quantumleap import QuantumLeapClient, QuantumLeapError, QuantumLeapNotFound
 from clients.mqtt import MQTTClient
@@ -44,11 +46,31 @@ def _handle_options_preflight():
         return resp
 
 
+@app.before_request
+def _attach_request_id():
+    """Attach a per-request id for log correlation."""
+    try:
+        rid = request.headers.get('X-Request-Id') or uuid4().hex
+        # store on flask.g and request for access
+        g.request_id = rid
+        setattr(request, 'request_id', rid)
+        logger.info('request.start', extra={'request_id': rid, 'method': request.method, 'path': request.path})
+    except Exception:
+        pass
+
+
 @app.after_request
 def _add_cors_headers(response):
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    # Propagate request id to clients
+    try:
+        rid = getattr(request, 'request_id', None) or getattr(g, 'request_id', None)
+        if rid:
+            response.headers['X-Request-Id'] = rid
+    except Exception:
+        pass
     return response
 
 # Initialize FIWARE clients with configuration
@@ -781,87 +803,100 @@ def health():
     """
     services_status = {}
     overall_status = 'healthy'
-    
-    # Check Orion-LD
-    try:
-        if orion_client.health_check():
-            services_status['orion-ld'] = {
-                'status': 'ok',
-                'url': settings.orion.url,
-            }
-        else:
-            services_status['orion-ld'] = {
-                'status': 'error',
-                'url': settings.orion.url,
-            }
-            overall_status = 'degraded'
-    except Exception as e:
-        services_status['orion-ld'] = {
-            'status': 'error',
-            'url': settings.orion.url,
-            'error': str(e),
+
+    request_id = getattr(request, 'request_id', None) or getattr(g, 'request_id', None) or uuid4().hex
+
+    # Helper to send alert webhook if configured
+    def _send_alert_if_needed(rid: str, services: dict):
+        webhook_url = os.getenv('ALERT_WEBHOOK_URL') or getattr(settings.app, 'alert_webhook_url', None)
+        dry_run = os.getenv('ALERT_DRY_RUN', '').lower() in ('1', 'true', 'yes')
+        if not webhook_url:
+            return
+        payload = {
+            'request_id': rid,
+            'services': services,
+            'timestamp': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
         }
-        overall_status = 'degraded'
-        logger.warning(f"Orion-LD health check failed: {e}")
-    
-    # Check QuantumLeap
-    try:
-        if ql_client.health_check():
-            services_status['quantumleap'] = {
-                'status': 'ok',
-                'url': settings.quantumleap.url,
-            }
-        else:
-            services_status['quantumleap'] = {
-                'status': 'error',
-                'url': settings.quantumleap.url,
-            }
-            overall_status = 'degraded'
-    except Exception as e:
-        services_status['quantumleap'] = {
-            'status': 'error',
-            'url': settings.quantumleap.url,
-            'error': str(e),
+        if dry_run:
+            logger.info('alert.dry_run', extra={'request_id': rid, 'alert_payload': payload})
+            return
+        try:
+            requests.post(webhook_url, json=payload, timeout=5)
+            logger.info('alert.sent', extra={'request_id': rid})
+        except Exception as exc:
+            logger.warning('Failed to send alert webhook: %s', exc, extra={'request_id': rid})
+
+    # Run checks in parallel to reduce latency
+    def _check_orion():
+        start = time.monotonic()
+        try:
+            ok = orion_client.health_check()
+            latency_ms = int((time.monotonic() - start) * 1000)
+            if ok:
+                return {'status': 'ok', 'url': settings.orion.url, 'latency_ms': latency_ms}
+            return {'status': 'error', 'url': settings.orion.url, 'latency_ms': latency_ms}
+        except Exception as e:
+            latency_ms = int((time.monotonic() - start) * 1000)
+            return {'status': 'error', 'url': settings.orion.url, 'latency_ms': latency_ms, 'error': str(e)}
+
+    def _check_ql():
+        start = time.monotonic()
+        try:
+            ok = ql_client.health_check()
+            latency_ms = int((time.monotonic() - start) * 1000)
+            if ok:
+                return {'status': 'ok', 'url': settings.quantumleap.url, 'latency_ms': latency_ms}
+            return {'status': 'error', 'url': settings.quantumleap.url, 'latency_ms': latency_ms}
+        except Exception as e:
+            latency_ms = int((time.monotonic() - start) * 1000)
+            return {'status': 'error', 'url': settings.quantumleap.url, 'latency_ms': latency_ms, 'error': str(e)}
+
+    def _check_mqtt():
+        start = time.monotonic()
+        try:
+            mqtt_client.connect()
+            connected = mqtt_client.is_connected
+            latency_ms = int((time.monotonic() - start) * 1000)
+            if connected:
+                mqtt_client.disconnect()
+                return {'status': 'ok', 'host': settings.mqtt.host, 'port': settings.mqtt.port, 'latency_ms': latency_ms}
+            return {'status': 'error', 'host': settings.mqtt.host, 'port': settings.mqtt.port, 'latency_ms': latency_ms}
+        except Exception as e:
+            latency_ms = int((time.monotonic() - start) * 1000)
+            return {'status': 'error', 'host': settings.mqtt.host, 'port': settings.mqtt.port, 'latency_ms': latency_ms, 'error': str(e)}
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as ex:
+        futs = {
+            'orion-ld': ex.submit(_check_orion),
+            'quantumleap': ex.submit(_check_ql),
+            'mqtt': ex.submit(_check_mqtt),
         }
-        overall_status = 'degraded'
-        logger.warning(f"QuantumLeap health check failed: {e}")
-    
-    # Check MQTT
-    try:
-        mqtt_client.connect()
-        if mqtt_client.is_connected:
-            services_status['mqtt'] = {
-                'status': 'ok',
-                'host': settings.mqtt.host,
-                'port': settings.mqtt.port,
-            }
-            mqtt_client.disconnect()
-        else:
-            services_status['mqtt'] = {
-                'status': 'error',
-                'host': settings.mqtt.host,
-                'port': settings.mqtt.port,
-            }
-            overall_status = 'degraded'
-    except Exception as e:
-        services_status['mqtt'] = {
-            'status': 'error',
-            'host': settings.mqtt.host,
-            'port': settings.mqtt.port,
-            'error': str(e),
-        }
-        overall_status = 'degraded'
-        logger.warning(f"MQTT health check failed: {e}")
-    
+        for name, fut in futs.items():
+            try:
+                services_status[name] = fut.result(timeout=10)
+                if services_status[name].get('status') != 'ok':
+                    overall_status = 'degraded'
+            except Exception as exc:
+                services_status[name] = {'status': 'error', 'error': str(exc)}
+                overall_status = 'degraded'
+                logger.warning('Health check %s failed: %s', name, exc, extra={'request_id': request_id})
+
     response = {
         'status': overall_status,
         'services': services_status,
         'timestamp': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+        'request_id': request_id,
     }
-    
-    # Return 200 for healthy/degraded, 503 for unhealthy
+
+    # Send alert if any service reports error (configurable webhook)
+    try:
+        if any(s.get('status') != 'ok' for s in services_status.values()):
+            _send_alert_if_needed(request_id, services_status)
+    except Exception:
+        pass
+
     http_status = 200 if overall_status in ['healthy', 'degraded'] else 503
-    
+
     return jsonify(response), http_status
 
 
