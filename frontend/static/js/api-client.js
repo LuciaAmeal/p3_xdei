@@ -235,7 +235,16 @@
     const resolvedUserId = String(userId || '').trim();
     const resolvedDisplayName = String(displayName || '').trim();
 
-    if (resolvedUserId) {
+    // Inject JWT Bearer token if available
+    if (global.AuthManager && global.AuthManager.getToken) {
+      const token = global.AuthManager.getToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+    }
+
+    // Fallback to X-User-Id header if no JWT token
+    if (resolvedUserId && !headers['Authorization']) {
       headers['X-User-Id'] = resolvedUserId;
     }
 
