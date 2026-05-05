@@ -938,7 +938,11 @@ def login():
         500: Token generation failed
     """
     try:
-        data = request.get_json() or {}
+        # Check Content-Type if request has a body
+        if request.data and request.content_type and 'application/json' not in request.content_type:
+            return jsonify(error='Content-Type must be application/json'), 415
+        
+        data = request.get_json(force=False, silent=True) or {}
         username = data.get('username', '').strip()
         password = data.get('password', '').strip()
         
