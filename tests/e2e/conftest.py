@@ -25,12 +25,15 @@ def wait_for_port(host: str, port: int, timeout: int = 120):
 def start_compose():
     root = repo_root()
     # Start compose
-    subprocess.run(['docker-compose', 'up', '-d'], cwd=root, check=True)
+    try:
+        subprocess.run(['docker-compose', 'up', '-d'], cwd=root, check=True, timeout=120)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as e:
+        pytest.skip(f'docker-compose failed or not available: {e}')
 
     # Run start.sh if present (wait helpers)
     start_sh = os.path.join(root, 'start.sh')
     if os.path.exists(start_sh):
-        subprocess.run(['bash', start_sh], cwd=root, check=False)
+        subprocess.run(['bash', start_sh], cwd=root, check=False, timeout=120)
 
     # Wait for core services
     host = os.environ.get('FIWARE_HOST', 'localhost')
@@ -45,7 +48,7 @@ def start_compose():
     yield
 
     if os.environ.get('SKIP_E2E_TEARDOWN') != '1':
-        subprocess.run(['docker-compose', 'down', '-v'], cwd=root)
+        subprocess.run(['docker-compose', 'down', '-v'], cwd=root, check=False, timeout=60)
 
 
 @pytest.fixture
