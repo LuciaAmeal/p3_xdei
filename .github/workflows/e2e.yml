@@ -1,0 +1,41 @@
+name: E2E tests
+
+on:
+  pull_request:
+    branches: [ "main", "feat/*", "test/*" ]
+  schedule:
+    - cron: '0 2 * * *' # nightly at 02:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f backend/requirements.txt ]; then pip install -r backend/requirements.txt; fi
+          pip install pytest requests paho-mqtt
+
+      - name: Start docker-compose
+        run: |
+          docker-compose up -d
+
+      - name: Wait & start helper
+        run: |
+          bash start.sh || true
+
+      - name: Run E2E pytest
+        env:
+          FIWARE_HOST: localhost
+        run: |
+          pytest tests/e2e -m e2e -q
+        timeout-minutes: 40
