@@ -87,6 +87,13 @@ class PredictionConfig:
     history_window_days: int
 
 
+@dataclass
+class JWTConfig:
+    """JWT authentication configuration."""
+    secret_key: str
+    expiration_hours: int
+
+
 class Settings:
     """Central settings manager."""
     
@@ -148,6 +155,12 @@ class Settings:
             cache_ttl_seconds=int(os.getenv("PREDICTION_CACHE_TTL_SECONDS", "900")),
             default_horizon_minutes=int(os.getenv("PREDICTION_DEFAULT_HORIZON_MINUTES", "30")),
             history_window_days=int(os.getenv("PREDICTION_HISTORY_WINDOW_DAYS", "14")),
+        )
+        
+        # JWT Authentication
+        self.jwt = JWTConfig(
+            secret_key=os.getenv("JWT_SECRET_KEY", "dev-secret-key"),
+            expiration_hours=int(os.getenv("JWT_EXPIRATION_HOURS", "24")),
         )
     
     def get_fiware_headers(self) -> dict:

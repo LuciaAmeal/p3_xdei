@@ -17,6 +17,7 @@ from clients.orion import OrionClient, OrionClientConflict, OrionClientError, Or
 from clients.quantumleap import QuantumLeapClient, QuantumLeapError, QuantumLeapNotFound
 from clients.mqtt import MQTTClient
 from config import settings
+from auth import generate_jwt, JWTError
 from prediction_service import (
     PredictionDependencyError,
     PredictionNotFoundError,
@@ -553,16 +554,33 @@ def _ngsi_property(value: Any) -> Dict[str, Any]:
 
 
 def _authenticated_user_id() -> Optional[str]:
+    """
+    Extract and validate user ID from request headers.
+    
+    Supports two authentication methods (in order of preference):
+    1. X-User-Id header (for backward compatibility with tests)
+    2. Authorization: Bearer <JWT> header (validates JWT signature)
+    
+    Returns:
+        User ID if authentication is valid, None otherwise
+    """
+    # Try X-User-Id header first (backward compatibility)
     user_id = request.headers.get('X-User-Id')
     if user_id:
         return user_id.strip() or None
 
+    # Try Bearer token (JWT)
     authorization = request.headers.get('Authorization', '').strip()
     if authorization.lower().startswith('bearer '):
         token = authorization[7:].strip()
-        return token or None
-
-    return authorization or None
+        if token:
+            # Import here to avoid circular imports
+            from auth import get_user_id_from_jwt
+            user_id = get_user_id_from_jwt(token)
+            if user_id:
+                return user_id
+    
+    return None
 
 
 def _identity_key(user_id: str) -> str:
@@ -856,6 +874,58 @@ def ping():
         JSON response with ping acknowledgment
     """
     return jsonify(ping='pong'), 200
+
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    """
+    Mock login endpoint for development JWT authentication.
+    
+    Accepts any non-empty username and password combination.
+    Returns a JWT token valid for 24 hours.
+    
+    Request body:
+        {
+            "username": "string (required, non-empty)",
+            "password": "string (required, non-empty)"
+        }
+    
+    Returns:
+        {
+            "token": "JWT_TOKEN_STRING",
+            "user_id": "username",
+            "expires_in_hours": 24
+        }
+    
+    Status codes:
+        200: Login successful
+        400: Missing or empty credentials
+        500: Token generation failed
+    """
+    try:
+        data = request.get_json() or {}
+        username = data.get('username', '').strip()
+        password = data.get('password', '').strip()
+        
+        # Validate credentials are not empty
+        if not username or not password:
+            return jsonify(error='Username and password are required'), 400
+        
+        # Generate JWT token
+        token = generate_jwt(username)
+        
+        return jsonify(
+            token=token,
+            user_id=username,
+            expires_in_hours=settings.jwt.expiration_hours
+        ), 200
+        
+    except JWTError as e:
+        logger.error(f"JWT generation error: {str(e)}")
+        return jsonify(error='Token generation failed'), 500
+    except Exception as e:
+        logger.error(f"Login error: {str(e)}")
+        return jsonify(error='Login failed'), 500
 
 
 @app.route('/api/routes', methods=['GET'])
