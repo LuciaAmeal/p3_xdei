@@ -10,6 +10,7 @@ on:
 jobs:
   e2e:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,17 +26,26 @@ jobs:
           if [ -f backend/requirements.txt ]; then pip install -r backend/requirements.txt; fi
           pip install pytest requests paho-mqtt
 
-      - name: Start docker-compose
+      - name: Start docker-compose (best-effort)
+        continue-on-error: true
         run: |
+          docker-compose --version
           docker-compose up -d
 
-      - name: Wait & start helper
+      - name: Wait for services (best-effort)
+        continue-on-error: true
         run: |
           bash start.sh || true
+          sleep 10
 
       - name: Run E2E pytest
         env:
           FIWARE_HOST: localhost
         run: |
-          pytest tests/e2e -m e2e -q
+          pytest tests/e2e -m e2e -v --tb=short
+
+      - name: Teardown docker-compose (cleanup)
+        if: always()
+        run: |
+          docker-compose down -v || true
         timeout-minutes: 40
