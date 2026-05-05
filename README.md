@@ -307,13 +307,66 @@ docker compose logs backend --tail 100
 - Verificar simulador activo y publicando telemetria.
 - Verificar bridge MQTT/IoT Agent (`vehicle-bridge`) en ejecucion.
 
+## Suite de Tests
+
+La suite incluye tests unitarios e integración organizados con pytest:
+
+### Estructura de tests
+
+- **Unit tests**: Tests rapidos sin dependencias externas (mocks para Orion, QuantumLeap, MQTT).
+  - `backend/tests/test_*.py` — API, servicios, clientes
+  - `tests/test_*.py` — Simulador, utilidades
+- **Integration tests**: Requieren servicios corriendo (Orion-LD, QuantumLeap, CrateDB, Mosquitto).
+  - Marcados con `@pytest.mark.integration`
+
+### Ejecucion con make
+
+```bash
+# Tests unitarios (rapido, ~10s)
+make test
+
+# Tests integracion (requiere docker compose, ~30-60s)
+make test-integration
+
+# Todos los tests
+make test-all
+```
+
+### Ejecucion directa con pytest
+
+```bash
+# Solo unitarios
+python -m pytest -m "not integration" -v
+
+# Solo integracion
+python -m pytest -m integration -v
+
+# Todos
+python -m pytest -v
+```
+
+### Markers y categorias
+
+- `@pytest.mark.integration` — Test requiere servicios FIWARE activos
+- Default (sin marker) — Test unitario con mocks
+
+Ver `pytest.ini` para configuracion de markers.
+
+### CI/CD
+
+GitHub Actions ejecuta automaticamente:
+1. **Unit tests** en `push` y `pull_request`
+2. **Integration tests** en `push` y `pull_request` (levanta `docker compose`)
+
+Ver `.github/workflows/test.yml` para detalles.
+
 ## Flujo GitHub Flow (contribucion)
 
 1. Crear rama desde `main` por issue (`issue-31-readme-docs`).
 2. Implementar cambios pequenos y trazables.
-3. Ejecutar validaciones/document checks.
+3. Ejecutar validaciones/tests (`make test`).
 4. Commit con mensaje claro.
-5. Push y abrir PR a `main`.
+5. Push y abrir PR a `main` — CI ejecuta tests automaticamente.
 
 ## Licencia
 

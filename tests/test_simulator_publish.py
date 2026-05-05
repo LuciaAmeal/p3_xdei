@@ -1,5 +1,7 @@
+import pytest
 from backend.dynamic_simulator import publish_telemetry, simulate_once
 
+pytestmark = pytest.mark.integration
 
 class MockMQTT:
     def __init__(self):

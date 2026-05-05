@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
 from prediction_service import PredictionNotFoundError, StopCrowdPredictor
 
 
