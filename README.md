@@ -25,6 +25,8 @@ Servicios expuestos (puertos locales):
 - Backend (stub): `8000` (`/health`)
 - Frontend (stub): `8080`
 
+Grafana se arranca con un datasource de CrateDB ya provisionado, usando el driver PostgreSQL contra `crate:5432` dentro de la red de Docker Compose.
+
 Nota de modelado de datos:
 Las entidades NGSI-LD deben alinearse con los esquemas estándar de `dataModel.UrbanMobility` de FIWARE (PublicTransportStop, PublicTransportRoute, Vehicle, etc.). Consultar `data_model.md`.
 
