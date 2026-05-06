@@ -126,6 +126,13 @@
     }
   }
 
+  async function loadShape(shapeId) {
+    if (!shapeId) {
+      throw new Error('shapeId is required')
+    }
+    return fetchJson(`/api/shapes/${encodeURIComponent(shapeId)}`);
+  }
+
   async function loadCurrentVehicles() {
     const vehiclesResponse = await fetchJson('/api/vehicles/current');
     return Array.isArray(vehiclesResponse.vehicles) ? vehiclesResponse.vehicles : [];
@@ -266,6 +273,7 @@
     loadVehicleHistory,
     loadAllVehicleHistory,
     createVehiclePolling,
+    loadShape,
     sampleData: () => cloneData(SAMPLE_DATA),
   };
 })(window);

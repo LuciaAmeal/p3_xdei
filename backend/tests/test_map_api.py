@@ -114,7 +114,9 @@ def test_api_routes_returns_render_ready_payload(mock_orion):
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["routes"][0]["routeShortName"] == "1"
-    assert payload["routes"][0]["path"] == [[-8.41, 43.37], [-8.4, 43.36]]
+    # path is now provided lazily; backend includes shapeId
+    assert payload["routes"][0]["path"] == [] or payload["routes"][0]["path"] == [[-8.41, 43.37], [-8.4, 43.36]]
+    assert payload["routes"][0]["shapeId"] == "urn:ngsi-ld:GtfsShape:s1"
     assert payload["routes"][0]["stopIds"] == ["urn:ngsi-ld:GtfsStop:s1"]
 
 
@@ -149,6 +151,22 @@ def test_api_current_vehicles_returns_vehicle_state(mock_orion):
     assert payload["vehicles"][0]["vehicleId"] == "bus-17"
     assert payload["vehicles"][0]["currentPosition"] == [-8.405, 43.365]
     assert payload["vehicles"][0]["tripId"] == "urn:ngsi-ld:GtfsTrip:t1"
+
+
+@patch("app.orion_client")
+def test_api_shape_returns_path(mock_orion):
+    mock_orion.get_entities.side_effect = lambda entity_type=None, **kwargs: {
+        "GtfsShape": [_make_shape()],
+    }.get(entity_type, [])
+
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        response = client.get("/api/shapes/urn:ngsi-ld:GtfsShape:s1")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["id"] == "urn:ngsi-ld:GtfsShape:s1"
+    assert payload["path"] == [[-8.41, 43.37], [-8.4, 43.36]]
 
 
 @patch("app.ql_client")
