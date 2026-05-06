@@ -146,6 +146,9 @@ function initScene3D() {
   controls.target.set(0, 18, 0);
   controls.update();
 
+  const defaultCameraPosition = new THREE.Vector3(160, 130, 170);
+  const defaultCameraTarget = new THREE.Vector3(0, 18, 0);
+
   const ambientLight = new THREE.AmbientLight(0xcdd7e8, 1.2);
   scene.add(ambientLight);
 
@@ -623,7 +626,32 @@ function initScene3D() {
       resizeObserver.disconnect();
     }
     window.removeEventListener('resize', resize);
+    window.removeEventListener('xdei:scene3d-reset-view', handleResetView);
+    window.removeEventListener('xdei:detail-longpress', handleDetailLongPress);
   }
+
+  function handleResetView() {
+    camera.position.copy(defaultCameraPosition);
+    controls.target.copy(defaultCameraTarget);
+    controls.update();
+
+    if (timelineStatusEl) {
+      timelineStatusEl.textContent = 'Vista 3D restablecida';
+    }
+  }
+
+  function handleDetailLongPress() {
+    if (!detailPanelEl || !detailPanelBodyEl || !detailPanelTitleEl) {
+      return;
+    }
+
+    detailPanelEl.classList.add('detail-panel--empty');
+    detailPanelTitleEl.textContent = 'Atajo táctil';
+    detailPanelBodyEl.innerHTML = '<p class="detail-panel__empty-state">Mantener pulsado activa este panel de ayuda. Usa doble toque para recenter y swipe en Timeline para navegar por el histórico.</p>';
+  }
+
+  window.addEventListener('xdei:scene3d-reset-view', handleResetView);
+  window.addEventListener('xdei:detail-longpress', handleDetailLongPress);
 
   window.addEventListener('beforeunload', cleanup, { once: true });
 

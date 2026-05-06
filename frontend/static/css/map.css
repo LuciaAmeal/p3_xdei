@@ -907,3 +907,225 @@ html, body {
     width: 100%;
   }
 }
+
+/* Mobile Tabs, view switching and safe areas */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+.app-tab-panel {
+  position: relative;
+}
+
+.app-tab-panel--viewport {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+}
+
+#viewport-3d,
+#viewport-2d {
+  pointer-events: auto;
+}
+
+#viewport-2d {
+  display: none;
+}
+
+body[data-active-view="3d"] #viewport-3d {
+  display: block;
+}
+
+body[data-active-view="3d"] #viewport-2d {
+  display: none;
+}
+
+body[data-active-view="2d"] #viewport-3d {
+  display: none;
+}
+
+body[data-active-view="2d"] #viewport-2d {
+  display: block;
+}
+
+.view-switcher {
+  display: inline-flex;
+  gap: 8px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  pointer-events: auto;
+}
+
+.view-switcher__button,
+.mobile-tabs__button {
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  min-height: 48px;
+  min-width: 48px;
+  padding: 10px 14px;
+  font: 700 0.82rem/1.2 system-ui, sans-serif;
+  background: rgba(255, 255, 255, 0.12);
+  color: #f5f7fb;
+  cursor: pointer;
+}
+
+.view-switcher__button.is-active,
+.mobile-tabs__button.is-active {
+  background: linear-gradient(180deg, #ffcf5a 0%, #ff9f1c 100%);
+  color: #102030;
+}
+
+.mobile-tabs {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1400;
+  display: none;
+  gap: 8px;
+  padding: 10px calc(10px + var(--safe-right)) calc(10px + var(--safe-bottom)) calc(10px + var(--safe-left));
+  background: rgba(9, 15, 26, 0.95);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  overflow-x: auto;
+}
+
+.mobile-tabs__button {
+  flex: 1 0 auto;
+  white-space: nowrap;
+}
+
+.timeline-button,
+.timeline-filter-button,
+.timeline-filters-toggle,
+.detail-panel__close,
+.gamification-button {
+  min-height: 48px;
+}
+
+@media (max-width: 768px) {
+  html,
+  body {
+    overflow: auto;
+  }
+
+  #app-shell {
+    min-height: 100vh;
+    padding-top: calc(86px + var(--safe-top));
+    padding-bottom: calc(88px + var(--safe-bottom));
+    padding-left: var(--safe-left);
+    padding-right: var(--safe-right);
+  }
+
+  #hud {
+    top: calc(8px + var(--safe-top));
+    left: calc(8px + var(--safe-left));
+    right: calc(8px + var(--safe-right));
+    gap: 8px;
+  }
+
+  .hud-legend {
+    display: none;
+  }
+
+  .mobile-tabs {
+    display: flex;
+  }
+
+  #timeline-panel,
+  #detail-panel,
+  #gamification-panel {
+    position: static;
+    width: calc(100vw - 20px - var(--safe-left) - var(--safe-right));
+    margin: 0 auto;
+    max-height: none;
+    max-width: none;
+  }
+
+  #timeline-panel,
+  #detail-panel,
+  #gamification-panel,
+  #viewport-3d,
+  #viewport-2d {
+    display: none;
+  }
+
+  body[data-active-tab="3d"] #viewport-3d,
+  body[data-active-tab="2d"] #viewport-2d,
+  body[data-active-tab="timeline"] #timeline-panel,
+  body[data-active-tab="details"] #detail-panel,
+  body[data-active-tab="gamification"] #gamification-panel {
+    display: block;
+  }
+
+  #viewport-3d,
+  #viewport-2d {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: calc(78px + var(--safe-bottom));
+    z-index: 0;
+  }
+
+  .view-switcher {
+    display: none;
+  }
+
+  .timeline-panel__actions {
+    flex-direction: column;
+  }
+
+  .timeline-button,
+  .gamification-button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .timeline-panel,
+  #detail-panel,
+  #gamification-panel {
+    border-radius: 18px;
+    padding: 14px;
+  }
+
+  .timeline-panel__meta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 320px) {
+  .mobile-tabs__button {
+    padding-left: 10px;
+    padding-right: 10px;
+    font-size: 0.76rem;
+  }
+
+  .hud-pill {
+    padding: 9px 12px;
+    font-size: 0.78rem;
+  }
+}
+
+@media (max-width: 768px) and (orientation: landscape) {
+  #app-shell {
+    padding-top: calc(70px + var(--safe-top));
+  }
+
+  #timeline-panel,
+  #detail-panel,
+  #gamification-panel {
+    width: calc(100vw - 16px - var(--safe-left) - var(--safe-right));
+  }
+
+  .mobile-tabs {
+    gap: 6px;
+  }
+}
