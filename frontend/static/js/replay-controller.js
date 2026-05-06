@@ -261,3 +261,7 @@ class ReplayController {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = ReplayController;
 }
+
+if (typeof window !== 'undefined') {
+  window.ReplayController = ReplayController;
+}

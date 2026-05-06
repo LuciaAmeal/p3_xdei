@@ -2,10 +2,16 @@
 <html lang="es">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <title>XDEI P3 - Frontend</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
     <link rel="stylesheet" href="static/css/map.css" />
   </head>
   <body>
@@ -14,6 +20,10 @@
         <div class="hud-stack">
           <div class="hud-pill">XDEI P3 · Escena base Three.js</div>
           <div id="map-status" class="hud-pill hud-pill--muted">Cargando terreno, edificios y cámara…</div>
+          <div class="view-switcher" role="tablist" aria-label="Selector de vista">
+            <button type="button" class="view-switcher__button is-active" data-tab-target="3d" role="tab" aria-selected="true">3D</button>
+            <button type="button" class="view-switcher__button" data-tab-target="2d" role="tab" aria-selected="false">2D</button>
+          </div>
         </div>
         <div class="hud-legend" aria-label="Leyenda de la escena">
           <span><i class="legend-swatch legend-terrain"></i> Terreno</span>
@@ -22,7 +32,15 @@
         </div>
       </section>
 
-      <section id="timeline-panel" class="timeline-panel" aria-label="Controles de escena">
+      <section id="viewport-3d" class="app-tab-panel app-tab-panel--viewport is-active" data-tab-panel="3d" aria-label="Vista 3D">
+        <div id="scene-root" role="application" aria-label="Escena 3D urbana"></div>
+      </section>
+
+      <section id="viewport-2d" class="app-tab-panel app-tab-panel--viewport" data-tab-panel="2d" aria-label="Vista 2D" hidden>
+        <div id="map" role="application" aria-label="Mapa 2D"></div>
+      </section>
+
+      <section id="timeline-panel" class="timeline-panel" data-tab-panel="timeline" aria-label="Controles de escena">
         <div class="timeline-panel__header">
           <div>
             <div class="timeline-panel__eyebrow">Three.js</div>
@@ -74,9 +92,7 @@
         </div>
       </section>
 
-      <div id="scene-root" role="application" aria-label="Escena 3D urbana"></div>
-
-      <aside id="detail-panel" aria-label="Detalle contextual">
+      <aside id="detail-panel" data-tab-panel="details" aria-label="Detalle contextual">
         <div class="detail-panel__header">
           <div>
             <div class="detail-panel__eyebrow">Detalle</div>
@@ -86,16 +102,39 @@
         </div>
         <div id="detail-panel-body" class="detail-panel__body"></div>
       </aside>
+
+      <aside id="gamification-panel" data-tab-panel="gamification" aria-label="Gamificación">
+        <div class="gamification-panel__header">
+          <div>
+            <div class="gamification-panel__eyebrow">Gamificación</div>
+            <h2 class="gamification-panel__title">Tu progreso</h2>
+          </div>
+          <div id="gamification-status" class="gamification-panel__status">Listo</div>
+        </div>
+        <div id="gamification-panel-body" class="gamification-panel__body">
+          <p class="detail-panel__empty-state">Inicia sesión para cargar tu progreso y recompensas.</p>
+        </div>
+      </aside>
+
+      <nav id="mobile-tabs" class="mobile-tabs" aria-label="Navegación móvil" role="tablist">
+        <button type="button" class="mobile-tabs__button is-active" data-tab-target="3d" role="tab" aria-selected="true">3D</button>
+        <button type="button" class="mobile-tabs__button" data-tab-target="2d" role="tab" aria-selected="false">2D</button>
+        <button type="button" class="mobile-tabs__button" data-tab-target="timeline" role="tab" aria-selected="false">Timeline</button>
+        <button type="button" class="mobile-tabs__button" data-tab-target="details" role="tab" aria-selected="false">Detalle</button>
+        <button type="button" class="mobile-tabs__button" data-tab-target="gamification" role="tab" aria-selected="false">Puntos</button>
+      </nav>
     </main>
 
-    <script>
-      window.addEventListener('DOMContentLoaded', function () {
-        if (typeof window.initScene3D === 'function') {
-          window.initScene3D();
-        }
-      });
-    </script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
     <script src="static/js/api-client.js"></script>
+    <script src="static/js/vehicle-manager.js"></script>
+    <script src="static/js/replay-controller.js"></script>
+    <script src="static/js/map.js"></script>
+    <script src="static/js/gamification-manager.js"></script>
+    <script src="static/js/tab-manager.js"></script>
+    <script src="static/js/view-switcher.js"></script>
+    <script src="static/js/touch-gestures.js"></script>
     <script type="module" src="static/js/scene3d.js"></script>
   </body>
 </html>
