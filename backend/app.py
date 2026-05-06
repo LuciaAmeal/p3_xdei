@@ -263,8 +263,11 @@ def _build_route_payloads() -> List[Dict[str, Any]]:
 
         related_trips = trips_by_route.get(route_id, [])
         path: List[List[float]] = []
+        first_shape_id: Optional[str] = None
         for trip in related_trips:
             shape_id = _relationship_object(trip, "hasShape") or _attribute_value(trip, "shapeId")
+            if shape_id and first_shape_id is None:
+                first_shape_id = shape_id
             if shape_id and shape_id in shapes_by_id and shapes_by_id[shape_id]:
                 path = shapes_by_id[shape_id]
                 break
@@ -286,6 +289,7 @@ def _build_route_payloads() -> List[Dict[str, Any]]:
                 "routeTextColor": _attribute_value(route, "routeTextColor"),
                 "operatorName": _attribute_value(route, "operatorName"),
                 "path": path,
+                "shapeId": first_shape_id,
                 "tripIds": [trip.get("id") for trip in related_trips if trip.get("id")],
                 "stopIds": route_stop_ids,
                 "stops": [
@@ -353,6 +357,32 @@ def _build_vehicle_payloads() -> List[Dict[str, Any]]:
         )
 
     return payloads
+
+
+@app.route('/api/shapes/<path:shape_id>', methods=['GET'])
+def api_shape(shape_id: str):
+    """Return the coordinates (path) for a given GtfsShape entity id.
+
+    The caller may pass either the full NGSI-LD id or the suffix; the endpoint
+    resolves both forms.
+    """
+    try:
+        shapes = _safe_entity_list("GtfsShape")
+    except Exception as exc:
+        logger.warning("Unable to load shapes: %s", exc)
+        return jsonify(error="Unable to load shapes"), 502
+
+    for shape in shapes:
+        if not isinstance(shape, dict):
+            continue
+        candidate_id = shape.get("id")
+        if not candidate_id:
+            continue
+        if candidate_id == shape_id or _entity_suffix(candidate_id) == _entity_suffix(shape_id):
+            coords = _shape_coordinates(shape)
+            return jsonify({"id": candidate_id, "path": coords}), 200
+
+    return jsonify(error=f"Shape not found: {shape_id}"), 404
 
 
 def _is_vehicle_state_entity_id(entity_id: str) -> bool:

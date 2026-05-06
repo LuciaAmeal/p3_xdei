@@ -932,23 +932,44 @@ function initMap() {
     const bounds = L.latLngBounds([]);
 
     routes.forEach((route) => {
-      const latLngs = pathToLatLngs(route.path);
-      if (!latLngs.length) {
+      const latLngs = Array.isArray(route.path) ? pathToLatLngs(route.path) : [];
+
+      const drawPolyline = (coords) => {
+        const ll = pathToLatLngs(coords);
+        if (!ll.length) {
+          return;
+        }
+        const color = normalizeColor(route.routeColor, hashColor(route.id || route.routeShortName || 'route'));
+        const polyline = L.polyline(ll, {
+          color,
+          weight: 5,
+          opacity: 0.88,
+          lineCap: 'round',
+          lineJoin: 'round',
+        });
+
+        polyline.bindPopup(routePopup(route));
+        polyline.addTo(routeLayer);
+        bounds.extend(polyline.getBounds());
+      };
+
+      if (latLngs.length) {
+        drawPolyline(route.path);
         return;
       }
 
-      const color = normalizeColor(route.routeColor, hashColor(route.id || route.routeShortName || 'route'));
-      const polyline = L.polyline(latLngs, {
-        color,
-        weight: 5,
-        opacity: 0.88,
-        lineCap: 'round',
-        lineJoin: 'round',
-      });
-
-      polyline.bindPopup(routePopup(route));
-      polyline.addTo(routeLayer);
-      bounds.extend(polyline.getBounds());
+      // If no path provided, attempt lazy-load via shapeId
+      if (route.shapeId && window.MapApiClient && typeof window.MapApiClient.loadShape === 'function') {
+        window.MapApiClient.loadShape(route.shapeId)
+          .then((resp) => {
+            if (resp && Array.isArray(resp.path) && resp.path.length) {
+              drawPolyline(resp.path);
+            }
+          })
+          .catch((err) => {
+            console.warn('Unable to lazy-load shape for route', route.id, err);
+          });
+      }
     });
 
     return bounds;
