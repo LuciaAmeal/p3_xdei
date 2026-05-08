@@ -1357,7 +1357,10 @@ function initMap() {
 
     const mapLoader = window.MapApiClient && typeof window.MapApiClient.loadMapData === 'function'
       ? window.MapApiClient.loadMapData()
-      : Promise.resolve(window.MapApiClient ? window.MapApiClient.sampleData() : { routes: [], stops: [], vehicles: [] });
+      : Promise.resolve({ routes: [], stops: [], vehicles: [] });
+    const emptyMapData = window.MapApiClient && typeof window.MapApiClient.createEmptyMapData === 'function'
+      ? window.MapApiClient.createEmptyMapData()
+      : { routes: [], stops: [], vehicles: [] };
 
     Promise.allSettled([mapLoader, loadTimelineHistory()])
       .then(function (results) {
@@ -1369,13 +1372,12 @@ function initMap() {
           if (manager && typeof manager.setVehicles === 'function' && mapResult.value && Array.isArray(mapResult.value.vehicles)) {
             manager.setVehicles(mapResult.value.vehicles, { source: 'bootstrap' });
           }
-        } else if (window.MapApiClient && typeof window.MapApiClient.sampleData === 'function') {
-          const sampleData = window.MapApiClient.sampleData();
-          updateMap(sampleData, { fitBounds: true, animate: false });
-          if (manager && typeof manager.setVehicles === 'function' && sampleData && Array.isArray(sampleData.vehicles)) {
-            manager.setVehicles(sampleData.vehicles, { source: 'bootstrap' });
+          if (
+            !mapResult.value ||
+            (!mapResult.value.routes.length && !mapResult.value.stops.length && !mapResult.value.vehicles.length)
+          ) {
+            setStatus('Backend conectado, pero no hay datos para mostrar');
           }
-          setStatus('Mostrando datos de muestra');
         }
 
         bindTimelineControls();
@@ -1387,16 +1389,13 @@ function initMap() {
       })
       .catch(function (error) {
         console.warn('Unable to render map data:', error);
-        if (window.MapApiClient && typeof window.MapApiClient.sampleData === 'function') {
-          const sampleData = window.MapApiClient.sampleData();
-          updateMap(sampleData, { fitBounds: true, animate: false });
-          const manager = getVehicleManager();
-          if (manager && typeof manager.setVehicles === 'function' && sampleData && Array.isArray(sampleData.vehicles)) {
-            manager.setVehicles(sampleData.vehicles, { source: 'bootstrap' });
-          }
-          connectVehicleManager();
+        updateMap(emptyMapData, { fitBounds: true, animate: false });
+        const manager = getVehicleManager();
+        if (manager && typeof manager.setVehicles === 'function') {
+          manager.setVehicles([], { source: 'bootstrap' });
         }
-        setStatus('Mostrando datos de muestra');
+        connectVehicleManager();
+        setStatus('No se pudo conectar con el backend');
       });
   }
 

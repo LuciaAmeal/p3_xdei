@@ -442,12 +442,13 @@ class OrionClient:
             True if healthy, False otherwise
         """
         try:
-            response = self._request(
+            response = self.session.request(
                 "GET",
-                "/ngsi-ld/v1/entities",
-                headers=self._get_headers(),
-                params={"limit": 1},
+                f"{self.base_url}/version",
+                timeout=self.timeout,
+                headers={"Accept": "application/json"},
             )
+            response.raise_for_status()
             return response.status_code == 200
         except Exception as e:
             logger.warning(f"Orion-LD health check failed: {e}")
