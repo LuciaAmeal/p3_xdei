@@ -4,23 +4,36 @@ services:
     ports:
       - "1883:1883"
     volumes:
+      - ./config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - mosquitto_data:/mosquitto/data
       - mosquitto_log:/mosquitto/log
 
+  mongo:
+    image: mongo:4.4
+    ports:
+      - "27017:27017"
+    command: ["--bind_ip_all", "--nojournal"]
+    volumes:
+      - mongo_data:/data/db
+
   orion-ld:
-    image: fiware/orion-ld:3.0.0
+    image: ${ORION_IMAGE:-fiware/orion-ld:latest}
+    command: ["-dbhost", "mongo"]
     environment:
       - CONTEXT_BROKER_HOST=0.0.0.0
+      - ORIONLD_MONGO_HOST=mongo
     ports:
       - "1026:1026"
+    depends_on:
+      - mongo
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:1026/ngsi-ld/v1/entities"]
+      test: ["CMD", "curl", "-f", "http://localhost:1026/version"]
       interval: 10s
       timeout: 5s
       retries: 10
 
   iot-agent-json:
-    image: fiware/iot-agent-json:1.16.0
+    image: ${IOT_AGENT_IMAGE:-fiware/iotagent-json:1.16.0}
     environment:
       - IOTA_CB_HOST=orion-ld
       - IOTA_CB_PORT=1026
@@ -72,6 +85,14 @@ services:
     image: xdei/backend:stub
     ports:
       - "8000:8000"
+    environment:
+      - MQTT_HOST=mosquitto
+      - ORION_HOST=orion-ld
+      - ORION_PORT=1026
+      - QUANTUMLEAP_HOST=quantumleap
+      - FIWARE_SERVICE=smartgondor
+      - FIWARE_SERVICEPATH=/gardens
+      - SKIP_SUBSCRIPTION_BOOTSTRAP=1
     depends_on:
       - orion-ld
     healthcheck:
@@ -99,7 +120,7 @@ services:
       - iot-agent-json
 
   quantumleap:
-    image: smartsdk/quantumleap:1.7.0
+    image: ${QUANTUMLEAP_IMAGE:-orchestracities/quantumleap:1.0.0}
     environment:
       - CRATE_HOST=crate
       - CRATE_PORT=4200
@@ -126,4 +147,5 @@ volumes:
   grafana_data:
   mosquitto_data:
   mosquitto_log:
+  mongo_data:
   gtfs_feed:
