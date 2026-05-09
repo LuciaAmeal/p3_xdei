@@ -8,11 +8,21 @@ Requisitos:
 Arranque rápido:
 
 ```bash
-# (opcional) preparar y esperar servicios críticos
+# Arranca la pila, espera a los servicios críticos y valida puertos publicados
 ./start.sh
+```
 
-# Levantar toda la pila (en segundo plano opcionalmente)
-docker compose up --build
+Si todo está apagado y cerrado, este es el flujo recomendado:
+
+1. Abrir una terminal en la raíz del repositorio.
+2. Asegurarse de que Docker y Docker Compose estén en ejecución.
+3. Ejecutar `./start.sh`.
+4. Esperar a que el script termine con el mensaje de que la pila está lista.
+
+Para apagarlo todo de forma ordenada:
+
+```bash
+docker compose down
 ```
 
 Servicios expuestos (puertos locales):
