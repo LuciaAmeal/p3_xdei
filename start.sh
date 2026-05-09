@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
+
+echo "Starting Docker Compose stack..."
+docker compose up -d --build
 
 echo "Waiting for core services to become available..."
 
@@ -20,15 +23,23 @@ wait_for() {
   return 1
 }
 
-# Wait for Mosquitto (MQTT)
-wait_for mosquitto 1883 Mosquitto 30
 
-# Wait for Orion-LD
-wait_for orion-ld 1026 Orion-LD 60
+# Wait for the locally published ports exposed by Docker Compose.
+wait_for localhost 1883 Mosquitto 30
 
-# Wait for CrateDB
-wait_for crate 4200 CrateDB 60
+# MongoDB is required by Orion-LD during startup.
+wait_for localhost 27017 MongoDB 30
 
-echo "All critical services responded; you can now run 'docker compose up' or start simulators." 
+wait_for localhost 1026 Orion-LD 60
+wait_for localhost 4041 "IoT Agent JSON" 60
+wait_for localhost 4200 CrateDB 60
+wait_for localhost 8668 QuantumLeap 60
+wait_for localhost 3000 Grafana 60
+wait_for localhost 8000 Backend 60
+wait_for localhost 8081 Frontend 60
 
-exec "$@"
+echo "All critical services responded; the stack is ready."
+
+if [[ $# -gt 0 ]]; then
+  exec "$@"
+fi

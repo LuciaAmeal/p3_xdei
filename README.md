@@ -21,14 +21,33 @@ git clone <repo-url>
 cd p3_xdei
 ```
 
-### 2) Levantar stack completo
+### 2) Arranque recomendado cuando todo está apagado
+
+```bash
+./start.sh
+```
+
+Si todo está apagado y cerrado, este es el flujo recomendado:
+
+1. Abrir una terminal en la raíz del repositorio.
+2. Asegurarse de que Docker y Docker Compose estén en ejecución.
+3. Ejecutar `./start.sh`.
+4. Esperar a que el script termine con el mensaje de que la pila está lista.
+
+### 3) Parada ordenada
+
+```bash
+docker compose down
+```
+
+### 4) Levantar stack completo manualmente
 
 ```bash
 # Compatibilidad: tambien sirve `docker-compose up --build -d`
 docker compose up --build -d
 ```
 
-### 3) Comprobar salud
+### 5) Comprobar salud
 
 ```bash
 curl http://localhost:8000/health
@@ -36,7 +55,7 @@ curl http://localhost:8000/health
 
 Respuesta esperada: JSON con `status` y estado por servicio FIWARE.
 
-### 4) Abrir interfaces
+### 6) Abrir interfaces
 
 - Frontend: http://localhost:8081
 - Backend API: http://localhost:8000

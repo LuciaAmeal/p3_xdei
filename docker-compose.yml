@@ -108,8 +108,7 @@ services:
     environment:
       - MQTT_HOST=mosquitto
       - MQTT_PORT=1883
-      - ORION_HOST=orion-ld
-      - ORION_PORT=1026
+      - ORION_URL=http://orion-ld:1026
       - IOTA_AGENT_URL=http://iot-agent-json:4041
       - BRIDGE_DEFAULT_KEY=1234
       - FIWARE_SERVICE=smartgondor
@@ -143,9 +142,9 @@ services:
       - BACKEND_BASE_URL=http://backend:8000
 
 volumes:
+  mongo_data:
   crate_data:
   grafana_data:
   mosquitto_data:
   mosquitto_log:
-  mongo_data:
   gtfs_feed:

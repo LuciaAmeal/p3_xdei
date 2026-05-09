@@ -217,7 +217,24 @@ class VehicleTelemetryBridge:
 
     def start(self) -> None:
         self.provision_iot_agent_group()
-        self.mqtt_client.connect()
+        last_error: Optional[Exception] = None
+        for attempt in range(1, 31):
+            try:
+                self.mqtt_client.connect()
+                break
+            except Exception as exc:  # pragma: no cover - integration startup retry
+                last_error = exc
+                logger.warning(
+                    "Attempt %s/30 to connect to MQTT broker %s:%s failed: %s",
+                    attempt,
+                    self.config.mqtt_host,
+                    self.config.mqtt_port,
+                    exc,
+                )
+                time.sleep(2)
+        else:
+            raise last_error if last_error is not None else RuntimeError("Unable to connect to MQTT broker")
+
         self.mqtt_client.subscribe(
             f"{self.config.telemetry_prefix}/+/telemetry",
             self.handle_message,
