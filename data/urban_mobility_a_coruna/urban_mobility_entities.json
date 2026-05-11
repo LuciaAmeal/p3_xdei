@@ -1,0 +1,1148 @@
+[
+  {
+    "id": "urn:ngsi-ld:GtfsRoute:r1",
+    "type": "GtfsRoute",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "routeShortName": {
+      "type": "Property",
+      "value": "1"
+    },
+    "routeLongName": {
+      "type": "Property",
+      "value": "Centro - Campus"
+    },
+    "routeDesc": {
+      "type": "Property",
+      "value": "Línea central entre el centro y el campus universitario"
+    },
+    "routeType": {
+      "type": "Property",
+      "value": 3
+    },
+    "routeColor": {
+      "type": "Property",
+      "value": "FF4D4D"
+    },
+    "routeTextColor": {
+      "type": "Property",
+      "value": "FFFFFF"
+    },
+    "operatorName": {
+      "type": "Property",
+      "value": "Transporte da Coruña"
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsRoute:r2",
+    "type": "GtfsRoute",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "routeShortName": {
+      "type": "Property",
+      "value": "4"
+    },
+    "routeLongName": {
+      "type": "Property",
+      "value": "Riazor - Matogrande"
+    },
+    "routeDesc": {
+      "type": "Property",
+      "value": "Línea litoral y residencial con paso por el centro"
+    },
+    "routeType": {
+      "type": "Property",
+      "value": 3
+    },
+    "routeColor": {
+      "type": "Property",
+      "value": "1E88E5"
+    },
+    "routeTextColor": {
+      "type": "Property",
+      "value": "FFFFFF"
+    },
+    "operatorName": {
+      "type": "Property",
+      "value": "Transporte da Coruña"
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsStop:s1",
+    "type": "GtfsStop",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "stopName": {
+      "type": "Property",
+      "value": "Praza de Pontevedra"
+    },
+    "stopCode": {
+      "type": "Property",
+      "value": "S1"
+    },
+    "stopDesc": {
+      "type": "Property",
+      "value": "Parada principal de conexión con el centro"
+    },
+    "platformCode": {
+      "type": "Property",
+      "value": "A"
+    },
+    "wheelchairBoarding": {
+      "type": "Property",
+      "value": 1
+    },
+    "zoneId": {
+      "type": "Property",
+      "value": "1"
+    },
+    "location": {
+      "type": "GeoProperty",
+      "value": {
+        "type": "Point",
+        "coordinates": [
+          -8.4138,
+          43.37
+        ]
+      }
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsStop:s2",
+    "type": "GtfsStop",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "stopName": {
+      "type": "Property",
+      "value": "Obelisco"
+    },
+    "stopCode": {
+      "type": "Property",
+      "value": "S2"
+    },
+    "stopDesc": {
+      "type": "Property",
+      "value": "Parada céntrica junto a la avenida principal"
+    },
+    "platformCode": {
+      "type": "Property",
+      "value": "B"
+    },
+    "wheelchairBoarding": {
+      "type": "Property",
+      "value": 1
+    },
+    "zoneId": {
+      "type": "Property",
+      "value": "1"
+    },
+    "location": {
+      "type": "GeoProperty",
+      "value": {
+        "type": "Point",
+        "coordinates": [
+          -8.405,
+          43.3705
+        ]
+      }
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsStop:s3",
+    "type": "GtfsStop",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "stopName": {
+      "type": "Property",
+      "value": "Estación de Autobuses"
+    },
+    "stopCode": {
+      "type": "Property",
+      "value": "S3"
+    },
+    "stopDesc": {
+      "type": "Property",
+      "value": "Intercambiador intermodal y servicios urbanos"
+    },
+    "platformCode": {
+      "type": "Property",
+      "value": "C"
+    },
+    "wheelchairBoarding": {
+      "type": "Property",
+      "value": 1
+    },
+    "zoneId": {
+      "type": "Property",
+      "value": "1"
+    },
+    "location": {
+      "type": "GeoProperty",
+      "value": {
+        "type": "Point",
+        "coordinates": [
+          -8.403,
+          43.3575
+        ]
+      }
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsStop:s4",
+    "type": "GtfsStop",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "stopName": {
+      "type": "Property",
+      "value": "Campus Sur"
+    },
+    "stopCode": {
+      "type": "Property",
+      "value": "S4"
+    },
+    "stopDesc": {
+      "type": "Property",
+      "value": "Acceso a la zona universitaria"
+    },
+    "platformCode": {
+      "type": "Property",
+      "value": "D"
+    },
+    "wheelchairBoarding": {
+      "type": "Property",
+      "value": 1
+    },
+    "zoneId": {
+      "type": "Property",
+      "value": "2"
+    },
+    "location": {
+      "type": "GeoProperty",
+      "value": {
+        "type": "Point",
+        "coordinates": [
+          -8.411,
+          43.3445
+        ]
+      }
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsStop:s5",
+    "type": "GtfsStop",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "stopName": {
+      "type": "Property",
+      "value": "Riazor"
+    },
+    "stopCode": {
+      "type": "Property",
+      "value": "S5"
+    },
+    "stopDesc": {
+      "type": "Property",
+      "value": "Parada próxima al frente marítimo"
+    },
+    "platformCode": {
+      "type": "Property",
+      "value": "E"
+    },
+    "wheelchairBoarding": {
+      "type": "Property",
+      "value": 1
+    },
+    "zoneId": {
+      "type": "Property",
+      "value": "1"
+    },
+    "location": {
+      "type": "GeoProperty",
+      "value": {
+        "type": "Point",
+        "coordinates": [
+          -8.4175,
+          43.368
+        ]
+      }
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsStop:s6",
+    "type": "GtfsStop",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "stopName": {
+      "type": "Property",
+      "value": "Matogrande"
+    },
+    "stopCode": {
+      "type": "Property",
+      "value": "S6"
+    },
+    "stopDesc": {
+      "type": "Property",
+      "value": "Parada residencial y de oficinas"
+    },
+    "platformCode": {
+      "type": "Property",
+      "value": "F"
+    },
+    "wheelchairBoarding": {
+      "type": "Property",
+      "value": 1
+    },
+    "zoneId": {
+      "type": "Property",
+      "value": "2"
+    },
+    "location": {
+      "type": "GeoProperty",
+      "value": {
+        "type": "Point",
+        "coordinates": [
+          -8.4075,
+          43.3515
+        ]
+      }
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsService:wd",
+    "type": "GtfsService",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "startDate": {
+      "type": "Property",
+      "value": "20260501"
+    },
+    "endDate": {
+      "type": "Property",
+      "value": "20261231"
+    },
+    "monday": {
+      "type": "Property",
+      "value": true
+    },
+    "tuesday": {
+      "type": "Property",
+      "value": true
+    },
+    "wednesday": {
+      "type": "Property",
+      "value": true
+    },
+    "thursday": {
+      "type": "Property",
+      "value": true
+    },
+    "friday": {
+      "type": "Property",
+      "value": true
+    },
+    "saturday": {
+      "type": "Property",
+      "value": false
+    },
+    "sunday": {
+      "type": "Property",
+      "value": false
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsShape:shape1",
+    "type": "GtfsShape",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "shapePoints": {
+      "type": "Property",
+      "value": [
+        [
+          -8.4138,
+          43.37
+        ],
+        [
+          -8.4082,
+          43.3682
+        ],
+        [
+          -8.403,
+          43.3575
+        ],
+        [
+          -8.411,
+          43.3445
+        ]
+      ]
+    },
+    "location": {
+      "type": "GeoProperty",
+      "value": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -8.4138,
+            43.37
+          ],
+          [
+            -8.4082,
+            43.3682
+          ],
+          [
+            -8.403,
+            43.3575
+          ],
+          [
+            -8.411,
+            43.3445
+          ]
+        ]
+      }
+    },
+    "shapeLength": {
+      "type": "Property",
+      "value": 2900.0
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsShape:shape2",
+    "type": "GtfsShape",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "shapePoints": {
+      "type": "Property",
+      "value": [
+        [
+          -8.4175,
+          43.368
+        ],
+        [
+          -8.4118,
+          43.3698
+        ],
+        [
+          -8.4085,
+          43.362
+        ],
+        [
+          -8.4075,
+          43.3515
+        ]
+      ]
+    },
+    "location": {
+      "type": "GeoProperty",
+      "value": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -8.4175,
+            43.368
+          ],
+          [
+            -8.4118,
+            43.3698
+          ],
+          [
+            -8.4085,
+            43.362
+          ],
+          [
+            -8.4075,
+            43.3515
+          ]
+        ]
+      }
+    },
+    "shapeLength": {
+      "type": "Property",
+      "value": 2600.0
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsTrip:t1",
+    "type": "GtfsTrip",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "tripHeadsign": {
+      "type": "Property",
+      "value": "Campus Sur"
+    },
+    "tripShortName": {
+      "type": "Property",
+      "value": "1A"
+    },
+    "directionId": {
+      "type": "Property",
+      "value": 0
+    },
+    "blockId": {
+      "type": "Property",
+      "value": "b1"
+    },
+    "shapeId": {
+      "type": "Property",
+      "value": "shape1"
+    },
+    "hasRoute": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsRoute:r1"
+    },
+    "hasService": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsService:wd"
+    },
+    "hasShape": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsShape:shape1"
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsTrip:t2",
+    "type": "GtfsTrip",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "tripHeadsign": {
+      "type": "Property",
+      "value": "Praza de Pontevedra"
+    },
+    "tripShortName": {
+      "type": "Property",
+      "value": "1B"
+    },
+    "directionId": {
+      "type": "Property",
+      "value": 1
+    },
+    "blockId": {
+      "type": "Property",
+      "value": "b1"
+    },
+    "shapeId": {
+      "type": "Property",
+      "value": "shape1"
+    },
+    "hasRoute": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsRoute:r1"
+    },
+    "hasService": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsService:wd"
+    },
+    "hasShape": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsShape:shape1"
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsTrip:t3",
+    "type": "GtfsTrip",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "tripHeadsign": {
+      "type": "Property",
+      "value": "Matogrande"
+    },
+    "tripShortName": {
+      "type": "Property",
+      "value": "4A"
+    },
+    "directionId": {
+      "type": "Property",
+      "value": 0
+    },
+    "blockId": {
+      "type": "Property",
+      "value": "b2"
+    },
+    "shapeId": {
+      "type": "Property",
+      "value": "shape2"
+    },
+    "hasRoute": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsRoute:r2"
+    },
+    "hasService": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsService:wd"
+    },
+    "hasShape": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsShape:shape2"
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsTrip:t4",
+    "type": "GtfsTrip",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "tripHeadsign": {
+      "type": "Property",
+      "value": "Riazor"
+    },
+    "tripShortName": {
+      "type": "Property",
+      "value": "4B"
+    },
+    "directionId": {
+      "type": "Property",
+      "value": 1
+    },
+    "blockId": {
+      "type": "Property",
+      "value": "b2"
+    },
+    "shapeId": {
+      "type": "Property",
+      "value": "shape2"
+    },
+    "hasRoute": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsRoute:r2"
+    },
+    "hasService": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsService:wd"
+    },
+    "hasShape": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsShape:shape2"
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsStopTime:t1_001",
+    "type": "GtfsStopTime",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "arrivalTime": {
+      "type": "Property",
+      "value": "07:30:00"
+    },
+    "departureTime": {
+      "type": "Property",
+      "value": "07:30:00"
+    },
+    "stopSequence": {
+      "type": "Property",
+      "value": 1
+    },
+    "pickupType": {
+      "type": "Property",
+      "value": 0
+    },
+    "dropOffType": {
+      "type": "Property",
+      "value": 0
+    },
+    "hasStop": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsStop:s1"
+    },
+    "hasTrip": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsTrip:t1"
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsStopTime:t1_002",
+    "type": "GtfsStopTime",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "arrivalTime": {
+      "type": "Property",
+      "value": "07:34:00"
+    },
+    "departureTime": {
+      "type": "Property",
+      "value": "07:34:00"
+    },
+    "stopSequence": {
+      "type": "Property",
+      "value": 2
+    },
+    "pickupType": {
+      "type": "Property",
+      "value": 0
+    },
+    "dropOffType": {
+      "type": "Property",
+      "value": 0
+    },
+    "hasStop": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsStop:s2"
+    },
+    "hasTrip": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsTrip:t1"
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsStopTime:t1_003",
+    "type": "GtfsStopTime",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "arrivalTime": {
+      "type": "Property",
+      "value": "07:41:00"
+    },
+    "departureTime": {
+      "type": "Property",
+      "value": "07:41:00"
+    },
+    "stopSequence": {
+      "type": "Property",
+      "value": 3
+    },
+    "pickupType": {
+      "type": "Property",
+      "value": 0
+    },
+    "dropOffType": {
+      "type": "Property",
+      "value": 0
+    },
+    "hasStop": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsStop:s3"
+    },
+    "hasTrip": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsTrip:t1"
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsStopTime:t1_004",
+    "type": "GtfsStopTime",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "arrivalTime": {
+      "type": "Property",
+      "value": "07:53:00"
+    },
+    "departureTime": {
+      "type": "Property",
+      "value": "07:53:00"
+    },
+    "stopSequence": {
+      "type": "Property",
+      "value": 4
+    },
+    "pickupType": {
+      "type": "Property",
+      "value": 0
+    },
+    "dropOffType": {
+      "type": "Property",
+      "value": 0
+    },
+    "hasStop": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsStop:s4"
+    },
+    "hasTrip": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsTrip:t1"
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsStopTime:t2_001",
+    "type": "GtfsStopTime",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "arrivalTime": {
+      "type": "Property",
+      "value": "08:10:00"
+    },
+    "departureTime": {
+      "type": "Property",
+      "value": "08:10:00"
+    },
+    "stopSequence": {
+      "type": "Property",
+      "value": 1
+    },
+    "pickupType": {
+      "type": "Property",
+      "value": 0
+    },
+    "dropOffType": {
+      "type": "Property",
+      "value": 0
+    },
+    "hasStop": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsStop:s4"
+    },
+    "hasTrip": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsTrip:t2"
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsStopTime:t2_002",
+    "type": "GtfsStopTime",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "arrivalTime": {
+      "type": "Property",
+      "value": "08:21:00"
+    },
+    "departureTime": {
+      "type": "Property",
+      "value": "08:21:00"
+    },
+    "stopSequence": {
+      "type": "Property",
+      "value": 2
+    },
+    "pickupType": {
+      "type": "Property",
+      "value": 0
+    },
+    "dropOffType": {
+      "type": "Property",
+      "value": 0
+    },
+    "hasStop": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsStop:s3"
+    },
+    "hasTrip": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsTrip:t2"
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsStopTime:t2_003",
+    "type": "GtfsStopTime",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "arrivalTime": {
+      "type": "Property",
+      "value": "08:29:00"
+    },
+    "departureTime": {
+      "type": "Property",
+      "value": "08:29:00"
+    },
+    "stopSequence": {
+      "type": "Property",
+      "value": 3
+    },
+    "pickupType": {
+      "type": "Property",
+      "value": 0
+    },
+    "dropOffType": {
+      "type": "Property",
+      "value": 0
+    },
+    "hasStop": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsStop:s2"
+    },
+    "hasTrip": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsTrip:t2"
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsStopTime:t2_004",
+    "type": "GtfsStopTime",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "arrivalTime": {
+      "type": "Property",
+      "value": "08:34:00"
+    },
+    "departureTime": {
+      "type": "Property",
+      "value": "08:34:00"
+    },
+    "stopSequence": {
+      "type": "Property",
+      "value": 4
+    },
+    "pickupType": {
+      "type": "Property",
+      "value": 0
+    },
+    "dropOffType": {
+      "type": "Property",
+      "value": 0
+    },
+    "hasStop": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsStop:s1"
+    },
+    "hasTrip": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsTrip:t2"
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsStopTime:t3_001",
+    "type": "GtfsStopTime",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "arrivalTime": {
+      "type": "Property",
+      "value": "07:15:00"
+    },
+    "departureTime": {
+      "type": "Property",
+      "value": "07:15:00"
+    },
+    "stopSequence": {
+      "type": "Property",
+      "value": 1
+    },
+    "pickupType": {
+      "type": "Property",
+      "value": 0
+    },
+    "dropOffType": {
+      "type": "Property",
+      "value": 0
+    },
+    "hasStop": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsStop:s5"
+    },
+    "hasTrip": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsTrip:t3"
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsStopTime:t3_002",
+    "type": "GtfsStopTime",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "arrivalTime": {
+      "type": "Property",
+      "value": "07:20:00"
+    },
+    "departureTime": {
+      "type": "Property",
+      "value": "07:20:00"
+    },
+    "stopSequence": {
+      "type": "Property",
+      "value": 2
+    },
+    "pickupType": {
+      "type": "Property",
+      "value": 0
+    },
+    "dropOffType": {
+      "type": "Property",
+      "value": 0
+    },
+    "hasStop": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsStop:s2"
+    },
+    "hasTrip": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsTrip:t3"
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsStopTime:t3_003",
+    "type": "GtfsStopTime",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "arrivalTime": {
+      "type": "Property",
+      "value": "07:31:00"
+    },
+    "departureTime": {
+      "type": "Property",
+      "value": "07:31:00"
+    },
+    "stopSequence": {
+      "type": "Property",
+      "value": 3
+    },
+    "pickupType": {
+      "type": "Property",
+      "value": 0
+    },
+    "dropOffType": {
+      "type": "Property",
+      "value": 0
+    },
+    "hasStop": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsStop:s6"
+    },
+    "hasTrip": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsTrip:t3"
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsStopTime:t4_001",
+    "type": "GtfsStopTime",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "arrivalTime": {
+      "type": "Property",
+      "value": "08:05:00"
+    },
+    "departureTime": {
+      "type": "Property",
+      "value": "08:05:00"
+    },
+    "stopSequence": {
+      "type": "Property",
+      "value": 1
+    },
+    "pickupType": {
+      "type": "Property",
+      "value": 0
+    },
+    "dropOffType": {
+      "type": "Property",
+      "value": 0
+    },
+    "hasStop": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsStop:s6"
+    },
+    "hasTrip": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsTrip:t4"
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsStopTime:t4_002",
+    "type": "GtfsStopTime",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "arrivalTime": {
+      "type": "Property",
+      "value": "08:16:00"
+    },
+    "departureTime": {
+      "type": "Property",
+      "value": "08:16:00"
+    },
+    "stopSequence": {
+      "type": "Property",
+      "value": 2
+    },
+    "pickupType": {
+      "type": "Property",
+      "value": 0
+    },
+    "dropOffType": {
+      "type": "Property",
+      "value": 0
+    },
+    "hasStop": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsStop:s2"
+    },
+    "hasTrip": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsTrip:t4"
+    }
+  },
+  {
+    "id": "urn:ngsi-ld:GtfsStopTime:t4_003",
+    "type": "GtfsStopTime",
+    "@context": [
+      "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+      "https://smartdatamodels.org/context.jsonld"
+    ],
+    "arrivalTime": {
+      "type": "Property",
+      "value": "08:24:00"
+    },
+    "departureTime": {
+      "type": "Property",
+      "value": "08:24:00"
+    },
+    "stopSequence": {
+      "type": "Property",
+      "value": 3
+    },
+    "pickupType": {
+      "type": "Property",
+      "value": 0
+    },
+    "dropOffType": {
+      "type": "Property",
+      "value": 0
+    },
+    "hasStop": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsStop:s5"
+    },
+    "hasTrip": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:GtfsTrip:t4"
+    }
+  }
+]

@@ -1,0 +1,7 @@
+stop_id,stop_code,stop_name,stop_desc,stop_lat,stop_lon,zone_id,platform_code,wheelchair_boarding
+s1,S1,Praza de Pontevedra,Parada principal de conexión con el centro,43.3700,-8.4138,1,A,1
+s2,S2,Obelisco,Parada céntrica junto a la avenida principal,43.3705,-8.4050,1,B,1
+s3,S3,Estación de Autobuses,Intercambiador intermodal y servicios urbanos,43.3575,-8.4030,1,C,1
+s4,S4,Campus Sur,Acceso a la zona universitaria,43.3445,-8.4110,2,D,1
+s5,S5,Riazor,Parada próxima al frente marítimo,43.3680,-8.4175,1,E,1
+s6,S6,Matogrande,Parada residencial y de oficinas,43.3515,-8.4075,2,F,1

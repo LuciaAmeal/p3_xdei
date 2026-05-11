@@ -1,0 +1,3 @@
+route_id,agency_id,route_short_name,route_long_name,route_desc,route_type,route_color,route_text_color
+r1,a1,1,Centro - Campus,Línea central entre el centro y el campus universitario,3,FF4D4D,FFFFFF
+r2,a1,4,Riazor - Matogrande,Línea litoral y residencial con paso por el centro,3,1E88E5,FFFFFF

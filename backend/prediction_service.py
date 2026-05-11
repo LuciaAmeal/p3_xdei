@@ -380,6 +380,13 @@ class StopCrowdPredictor:
 
     def _attribute_value(self, entity: Dict[str, Any], name: str, default: Any = None) -> Any:
         attribute = entity.get(name)
+        if attribute is None and isinstance(entity, dict):
+            for key, candidate in entity.items():
+                if not isinstance(key, str):
+                    continue
+                if key == name or key.endswith(f"/{name}") or key.endswith(f"#{name}"):
+                    attribute = candidate
+                    break
         if isinstance(attribute, dict):
             return attribute.get("value", default)
         return default
@@ -445,6 +452,13 @@ class StopCrowdPredictor:
 
     def _relationship_object(self, entity: Dict[str, Any], name: str) -> Optional[str]:
         attribute = entity.get(name)
+        if attribute is None and isinstance(entity, dict):
+            for key, candidate in entity.items():
+                if not isinstance(key, str):
+                    continue
+                if key == name or key.endswith(f"/{name}") or key.endswith(f"#{name}"):
+                    attribute = candidate
+                    break
         if isinstance(attribute, dict):
             object_id = attribute.get("object")
             if isinstance(object_id, str):

@@ -11,6 +11,33 @@
     const configuredValue = (window.BACKEND_BASE_URL || '').trim().replace(/\/+$/g, '');
 
     if (configuredValue && configuredValue !== '__BACKEND_BASE_URL__') {
+      try {
+        const configuredUrl = new URL(configuredValue);
+        if (configuredUrl.hostname === 'backend') {
+          if (window.location.protocol === 'file:') {
+            return 'http://127.0.0.1:8000';
+          }
+
+          if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            return `${window.location.protocol}//${window.location.hostname}:8000`;
+          }
+
+          return configuredValue;
+        }
+
+        return configuredValue;
+      } catch (error) {
+        // Keep the configured value if it is not a valid URL.
+      }
+
+      if (window.location.protocol === 'file:') {
+        return 'http://127.0.0.1:8000';
+      }
+
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return `${window.location.protocol}//${window.location.hostname}:8000`;
+      }
+
       return configuredValue;
     }
 

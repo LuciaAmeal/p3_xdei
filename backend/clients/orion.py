@@ -160,15 +160,27 @@ class OrionClient:
         
         if filters:
             params.update(filters)
-        
-        try:
+
+        def _query(current_type: Optional[str]) -> List[Dict[str, Any]]:
+            current_params = dict(params)
+            if current_type:
+                current_params["type"] = current_type
+
             response = self._request(
                 "GET",
                 path,
                 headers=self._get_headers(),
-                params=params,
+                params=current_params,
             )
-            entities = response.json()
+            return response.json()
+        
+        try:
+            entities = _query(entity_type)
+
+            if entity_type and not entities and not entity_type.startswith(("http://", "https://")):
+                smart_data_models_type = f"https://uri.fiware.org/ns/data-models#{entity_type}"
+                entities = _query(smart_data_models_type)
+
             logger.info(f"Retrieved {len(entities)} entities")
             return entities
         

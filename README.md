@@ -31,7 +31,7 @@ Si todo está apagado y cerrado, este es el flujo recomendado:
 
 1. Abrir una terminal en la raíz del repositorio.
 2. Asegurarse de que Docker y Docker Compose estén en ejecución.
-3. Ejecutar `./start.sh`.
+3. Ejecutar `bash start.sh`.
 4. Esperar a que el script termine con el mensaje de que la pila está lista.
 
 ### 3) Parada ordenada

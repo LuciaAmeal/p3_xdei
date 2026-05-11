@@ -35,6 +35,64 @@ logger = setup_logger(__name__)
 app = Flask(__name__)
 
 
+@app.route('/', methods=['GET'])
+def index():
+        """Lightweight landing page so the backend opens directly in a browser."""
+        health_url = '/health'
+        api_links = [
+                ('Health', '/health'),
+                ('Ping', '/api/ping'),
+                ('Login', '/api/login'),
+                ('Routes', '/api/routes'),
+                ('Stops', '/api/stops'),
+                ('Vehicles current', '/api/vehicles/current'),
+                ('Vehicle history', '/api/vehicles/history'),
+                ('Predictions', '/api/predict'),
+        ]
+
+        links_html = ''.join(
+                f'<li><a href="{path}">{label}</a></li>' for label, path in api_links
+        )
+
+        return f"""
+        <!doctype html>
+        <html lang="es">
+            <head>
+                <meta charset="utf-8" />
+                <meta name="viewport" content="width=device-width, initial-scale=1" />
+                <title>XDEI P3 - Backend</title>
+                <style>
+                    :root {{ color-scheme: dark; }}
+                    body {{ margin: 0; min-height: 100vh; font-family: system-ui, sans-serif; background: linear-gradient(180deg, #0b1220, #111b2e); color: #f5f7fb; }}
+                    main {{ max-width: 900px; margin: 0 auto; padding: 40px 20px 56px; }}
+                    .card {{ background: rgba(8, 14, 25, 0.9); border: 1px solid rgba(255,255,255,0.12); border-radius: 24px; padding: 24px; box-shadow: 0 22px 60px rgba(0,0,0,0.32); }}
+                    h1 {{ margin: 0 0 12px; font-size: 2rem; }}
+                    p {{ line-height: 1.6; color: rgba(245,247,251,.82); }}
+                    ul {{ display: grid; gap: 10px; padding-left: 20px; }}
+                    a {{ color: #ffcf5a; text-decoration: none; }}
+                    a:hover {{ text-decoration: underline; }}
+                    .meta {{ display: grid; gap: 8px; margin-top: 20px; padding: 16px; border-radius: 18px; background: rgba(255,255,255,0.05); }}
+                    code {{ background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 8px; }}
+                </style>
+            </head>
+            <body>
+                <main>
+                    <section class="card">
+                        <h1>XDEI P3 Backend</h1>
+                        <p>API Flask para movilidad urbana FIWARE/NGSI-LD. Desde aquí puedes abrir los endpoints principales y comprobar salud del stack.</p>
+                        <div class="meta">
+                            <div><strong>Health:</strong> <a href="{health_url}">{health_url}</a></div>
+                            <div><strong>Frontend:</strong> <a href="http://localhost:8081">http://localhost:8081</a></div>
+                        </div>
+                        <h2>Endpoints</h2>
+                        <ul>{links_html}</ul>
+                    </section>
+                </main>
+            </body>
+        </html>
+        """
+
+
 @app.before_request
 def _handle_options_preflight():
     """Respond to CORS preflight requests early to simplify browser calls."""
@@ -133,6 +191,13 @@ GAMIFICATION_ACHIEVEMENT_RULES = [
 
 def _attribute_value(entity: Dict[str, Any], name: str, default: Any = None) -> Any:
     attribute = entity.get(name)
+    if attribute is None and isinstance(entity, dict):
+        for key, candidate in entity.items():
+            if not isinstance(key, str):
+                continue
+            if key == name or key.endswith(f"/{name}") or key.endswith(f"#{name}"):
+                attribute = candidate
+                break
     if isinstance(attribute, dict):
         return attribute.get("value", default)
     return default
@@ -140,6 +205,13 @@ def _attribute_value(entity: Dict[str, Any], name: str, default: Any = None) -> 
 
 def _relationship_object(entity: Dict[str, Any], name: str) -> Optional[str]:
     attribute = entity.get(name)
+    if attribute is None and isinstance(entity, dict):
+        for key, candidate in entity.items():
+            if not isinstance(key, str):
+                continue
+            if key == name or key.endswith(f"/{name}") or key.endswith(f"#{name}"):
+                attribute = candidate
+                break
     if isinstance(attribute, dict):
         object_id = attribute.get("object")
         if isinstance(object_id, str):
@@ -263,10 +335,12 @@ def _build_route_payloads() -> List[Dict[str, Any]]:
 
         related_trips = trips_by_route.get(route_id, [])
         path: List[List[float]] = []
+        shape_id: Optional[str] = None
         for trip in related_trips:
-            shape_id = _relationship_object(trip, "hasShape") or _attribute_value(trip, "shapeId")
-            if shape_id and shape_id in shapes_by_id and shapes_by_id[shape_id]:
-                path = shapes_by_id[shape_id]
+            shape_id_candidate = _relationship_object(trip, "hasShape") or _attribute_value(trip, "shapeId")
+            if shape_id_candidate and shape_id_candidate in shapes_by_id and shapes_by_id[shape_id_candidate]:
+                path = shapes_by_id[shape_id_candidate]
+                shape_id = shape_id_candidate
                 break
 
         route_stop_ids: List[str] = []
@@ -286,6 +360,7 @@ def _build_route_payloads() -> List[Dict[str, Any]]:
                 "routeTextColor": _attribute_value(route, "routeTextColor"),
                 "operatorName": _attribute_value(route, "operatorName"),
                 "path": path,
+                "shapeId": shape_id,
                 "tripIds": [trip.get("id") for trip in related_trips if trip.get("id")],
                 "stopIds": route_stop_ids,
                 "stops": [
@@ -450,7 +525,11 @@ def _build_vehicle_history_records(series_data: Dict[str, Any]) -> List[Dict[str
 
 
 def _build_vehicle_history_payloads(from_date: Optional[str], to_date: Optional[str], vehicle_filter: Optional[str], page: int, page_size: int) -> Dict[str, Any]:
-    available_entities = ql_client.get_available_entities()
+    try:
+        available_entities = ql_client.get_available_entities()
+    except QuantumLeapNotFound:
+        available_entities = []
+
     if isinstance(available_entities, dict):
         available_entities = available_entities.get("entities", [])
 
@@ -977,6 +1056,22 @@ def api_routes():
 def api_stops():
     """Return stop data ready for Leaflet markers."""
     return jsonify(stops=_build_stop_payloads()), 200
+
+
+@app.route('/api/shapes/<path:shape_id>', methods=['GET'])
+def api_shape(shape_id: str):
+    """Return shape (route path) data by ID."""
+    try:
+        shapes = _safe_entity_list("GtfsShape")
+        shape = next((s for s in shapes if s.get("id") == shape_id), None)
+        if not shape:
+            return jsonify(error='Shape not found'), 404
+    except Exception as exc:
+        logger.warning('Unable to load shape: %s', exc)
+        return jsonify(error='Unable to load shape', detail=str(exc)), 502
+
+    path = _shape_coordinates(shape)
+    return jsonify(id=shape_id, path=path), 200
 
 
 @app.route('/api/vehicles/current', methods=['GET'])
