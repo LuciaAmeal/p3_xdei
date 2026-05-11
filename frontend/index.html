@@ -19,7 +19,15 @@
         <div>
           <div class="topbar__eyebrow">XDEI P3 · FIWARE Urban Mobility</div>
           <h1 class="topbar__title">Movilidad urbana en A Coruña</h1>
-          <p class="topbar__subtitle">Alterna entre mapa 2D, escena 3D, predicción y gamificación sin salir de la aplicación.</p>
+          <details class="topbar__quick-menu">
+            <summary class="topbar__quick-summary">Opciones rápidas</summary>
+            <div class="topbar__quick-menu-panel" role="menu" aria-label="Alternar entre vistas y módulos">
+              <button type="button" class="topbar__quick-item" data-tab-target="3d" role="menuitem">Vista 3D</button>
+              <button type="button" class="topbar__quick-item" data-tab-target="2d" role="menuitem">Mapa 2D</button>
+              <button type="button" class="topbar__quick-item" data-tab-target="prediction" role="menuitem">Predicción</button>
+              <button type="button" class="topbar__quick-item" data-tab-target="gamification" role="menuitem">Gamificación</button>
+            </div>
+          </details>
         </div>
         <nav class="topbar__tabs" aria-label="Selector de vistas">
           <button type="button" class="topbar__tab is-active" data-tab-target="3d">Vista 3D</button>
@@ -101,6 +109,45 @@
         </div>
       </section>
 
+      <section id="prediction-panel" class="timeline-panel prediction-panel" data-tab-panel="prediction" aria-label="Predicción de ocupación">
+        <div class="timeline-panel__header">
+          <div>
+            <div class="timeline-panel__eyebrow">Predicción</div>
+            <h2 class="timeline-panel__title">Ocupación prevista</h2>
+          </div>
+          <div class="timeline-panel__status">Consulta rápida</div>
+        </div>
+        <div class="timeline-panel__meta">
+          <span>Resume la previsión de aforo por parada</span>
+          <span>Basado en /api/predict</span>
+        </div>
+        <div class="prediction-panel__body">
+          <div class="detail-panel__note">
+            Abre una parada desde el mapa o usa el backend para calcular predicciones de ocupación.
+          </div>
+          <div class="prediction-panel__actions">
+            <button type="button" class="timeline-button" data-tab-target="2d">Ir al mapa 2D</button>
+            <button type="button" class="timeline-button timeline-button--ghost" data-tab-target="3d">Volver a 3D</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="gamification-panel" class="gamification-panel" data-tab-panel="gamification" aria-label="Gamificación">
+        <div class="gamification-panel__header">
+          <div>
+            <div class="gamification-panel__eyebrow">Gamificación</div>
+            <h2 class="gamification-panel__title">Puntos y logros</h2>
+          </div>
+          <div id="gamification-status" class="gamification-panel__status">Listo</div>
+        </div>
+        <div id="gamification-panel-body" class="gamification-panel__body">
+          <section class="gamification-section gamification-empty">
+            <h3 class="gamification-section__title">Carga tu perfil</h3>
+            <p class="gamification-empty__text">Introduce un usuario para ver sus puntos, logros y canjes disponibles.</p>
+          </section>
+        </div>
+      </section>
+
       <aside id="detail-panel" aria-label="Detalle contextual">
         <div class="detail-panel__header">
           <div>
@@ -118,6 +165,7 @@
     <script src="static/js/map.js?v=20260511a"></script>
     <script src="static/js/tab-manager.js?v=20260511a"></script>
     <script src="static/js/view-switcher.js?v=20260511a"></script>
+    <script src="static/js/gamification-manager.js?v=20260511a"></script>
     <script type="module" src="static/js/scene3d.js?v=20260511a"></script>
   </body>
 </html>

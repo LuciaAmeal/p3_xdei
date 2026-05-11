@@ -111,6 +111,11 @@
         }
 
         setTab(target);
+
+        const quickMenu = button.closest('details.topbar__quick-menu');
+        if (quickMenu) {
+          quickMenu.open = false;
+        }
       });
     });
 
