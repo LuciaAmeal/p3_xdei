@@ -40,6 +40,10 @@
             <span class="menu-dropdown__icon">🏆</span>
             <span class="menu-dropdown__label">Gamificación</span>
           </button>
+          <button type="button" class="menu-dropdown__item" data-tab-target="chat">
+            <span class="menu-dropdown__icon">🤖</span>
+            <span class="menu-dropdown__label">Asistente AI</span>
+          </button>
         </nav>
       </div>
 
@@ -96,6 +100,37 @@
           </div>
           <div class="prediction-container">
             <iframe src="http://localhost:3000/d/occupancy?orgId=1&refresh=10s&kiosk" width="100%" height="100%" frameborder="0"></iframe>
+          </div>
+        </section>
+
+        <section id="chat-panel" class="workspace__panel chat-panel" data-tab-panel="chat" aria-label="Asistente AI" hidden>
+          <div class="chat-container">
+            <div class="chat-header">
+              <div class="chat-header__info">
+                <div class="chat-header__eyebrow">XDEI Intelligent Assistant</div>
+                <h2 class="chat-header__title">¿En qué puedo ayudarte hoy?</h2>
+              </div>
+              <div class="chat-header__status">
+                <span class="status-dot"></span>
+                <span id="chat-status-text">Conectado a LM Studio</span>
+              </div>
+            </div>
+            <div id="chat-messages" class="chat-messages">
+              <div class="chat-message chat-message--ai">
+                <div class="chat-message__avatar">🤖</div>
+                <div class="chat-message__content">
+                  Hola. Soy tu asistente de movilidad urbana para A Coruña. Puedo ayudarte con información sobre rutas, paradas, ocupación de vehículos o cualquier duda que tengas sobre la plataforma.
+                </div>
+              </div>
+            </div>
+            <div class="chat-input-area">
+              <form id="chat-form" class="chat-form">
+                <input type="text" id="chat-input" placeholder="Escribe tu mensaje aquí..." autocomplete="off" required>
+                <button type="submit" id="chat-send" class="chat-send-btn" aria-label="Enviar mensaje">
+                  <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2.5" fill="none"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"></path></svg>
+                </button>
+              </form>
+            </div>
           </div>
         </section>
       </section>
@@ -193,5 +228,6 @@
     <script src="static/js/view-switcher.js?v=20260511b"></script>
     <script src="static/js/auth.js?v=20260511b"></script>
     <script src="static/js/gamification-manager.js?v=20260511b"></script>
+    <script src="static/js/chat-manager.js?v=20260511b"></script>
     <script type="module" src="static/js/scene3d.js?v=20260511b"></script>  </body>
 </html>

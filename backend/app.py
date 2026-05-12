@@ -18,6 +18,7 @@ import requests
 from clients.orion import OrionClient, OrionClientConflict, OrionClientError, OrionClientNotFound
 from clients.quantumleap import QuantumLeapClient, QuantumLeapError, QuantumLeapNotFound
 from clients.mqtt import MQTTClient
+from clients.lm_studio import LMStudioClient, LMStudioError
 from config import settings
 from auth import generate_jwt, JWTError
 from load_gtfs import load_gtfs, GTFSLoadError, GTFSValidationError
@@ -49,6 +50,7 @@ def index():
                 ('Vehicles current', '/api/vehicles/current'),
                 ('Vehicle history', '/api/vehicles/history'),
                 ('Predictions', '/api/predict'),
+                ('Chat AI', '/api/chat'),
         ]
 
         links_html = ''.join(
@@ -152,6 +154,11 @@ mqtt_client = MQTTClient(
     port=settings.mqtt.port,
     timeout=settings.mqtt.timeout,
     keepalive=settings.mqtt.keepalive,
+)
+
+lm_studio_client = LMStudioClient(
+    base_url=settings.lm_studio.url,
+    timeout=settings.lm_studio.timeout,
 )
 
 prediction_service = StopCrowdPredictor(
@@ -1000,6 +1007,7 @@ def health():
             'orion-ld': ex.submit(_check_orion),
             'quantumleap': ex.submit(_check_ql),
             'mqtt': ex.submit(_check_mqtt),
+            'lm-studio': ex.submit(lambda: {'status': 'ok' if lm_studio_client.health_check() else 'error', 'url': settings.lm_studio.url}),
         }
         for name, fut in futs.items():
             try:
@@ -1374,6 +1382,36 @@ def api_load_gtfs():
     except Exception as exc:
         logger.exception('GTFS load failed: %s', exc)
         return jsonify(error='Unexpected error during GTFS load', detail=str(exc)), 500
+
+
+@app.route('/api/chat', methods=['POST'])
+def api_chat():
+    """
+    Proxy request to LM Studio for chat completions.
+    
+    Request body:
+        {
+            "messages": [
+                {"role": "user", "content": "Hello"},
+                ...
+            ]
+        }
+    """
+    data = request.get_json(silent=True) or {}
+    messages = data.get('messages', [])
+    
+    if not messages:
+        return jsonify(error='Messages are required'), 400
+        
+    try:
+        response = lm_studio_client.chat_completion(messages)
+        return jsonify(response), 200
+    except LMStudioError as exc:
+        logger.warning(f"LM Studio error: {exc}")
+        return jsonify(error="AI service unavailable", detail=str(exc)), 502
+    except Exception as exc:
+        logger.exception(f"Unexpected error in chat endpoint: {exc}")
+        return jsonify(error="Unexpected error in chat endpoint", detail=str(exc)), 500
 
 
 

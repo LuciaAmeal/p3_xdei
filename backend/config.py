@@ -94,6 +94,13 @@ class JWTConfig:
     expiration_hours: int
 
 
+@dataclass
+class LMStudioConfig:
+    """LM Studio service configuration."""
+    url: str
+    timeout: int
+
+
 class Settings:
     """Central settings manager."""
     
@@ -161,6 +168,12 @@ class Settings:
         self.jwt = JWTConfig(
             secret_key=os.getenv("JWT_SECRET_KEY", "dev-secret-key"),
             expiration_hours=int(os.getenv("JWT_EXPIRATION_HOURS", "24")),
+        )
+
+        # LM Studio
+        self.lm_studio = LMStudioConfig(
+            url=os.getenv("LM_STUDIO_URL", "http://192.168.1.132:1234"),
+            timeout=int(os.getenv("LM_STUDIO_TIMEOUT", "60")),
         )
     
     def get_fiware_headers(self) -> dict:

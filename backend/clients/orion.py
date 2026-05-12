@@ -74,6 +74,11 @@ class OrionClient:
             "Accept": "application/ld+json",
         }
         headers.update(self.fiware_headers)
+        
+        # Add NGSI-LD-Tenant if Fiware-Service is present for better Orion-LD compatibility
+        if "Fiware-Service" in self.fiware_headers:
+            headers["NGSI-LD-Tenant"] = self.fiware_headers["Fiware-Service"]
+            
         return headers
     
     @retry(

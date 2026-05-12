@@ -17,7 +17,7 @@ services:
       - mongo_data:/data/db
 
   orion-ld:
-    image: ${ORION_IMAGE:-fiware/orion-ld:latest}
+    image: ${ORION_IMAGE:-fiware/orion-ld:1.5.1}
     command: ["-dbhost", "mongo"]
     environment:
       - CONTEXT_BROKER_HOST=0.0.0.0
@@ -104,9 +104,11 @@ services:
       - ORION_HOST=orion-ld
       - ORION_PORT=1026
       - QUANTUMLEAP_HOST=quantumleap
-      - FIWARE_SERVICE=smartgondor
-      - FIWARE_SERVICEPATH=/gardens
+#      - FIWARE_SERVICE=smartgondor
+#      - FIWARE_SERVICEPATH=/gardens
       - GTFS_ZIP_PATH=/data/urban_mobility_a_coruna/urban_mobility_a_coruna_gtfs.zip
+      - LOG_LEVEL=INFO
+      - LM_STUDIO_URL=http://192.168.1.132:1234
     volumes:
       - ./data:/data:ro
     depends_on:
