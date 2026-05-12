@@ -20,6 +20,7 @@ from clients.quantumleap import QuantumLeapClient, QuantumLeapError, QuantumLeap
 from clients.mqtt import MQTTClient
 from config import settings
 from auth import generate_jwt, JWTError
+from load_gtfs import load_gtfs, GTFSLoadError, GTFSValidationError
 from prediction_service import (
     PredictionDependencyError,
     PredictionNotFoundError,
@@ -613,6 +614,9 @@ def build_vehicle_state_history_subscription() -> dict:
                 "accept": "application/ld+json",
             },
         },
+        "@context": [
+            "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld"
+        ],
     }
 
 
@@ -1307,6 +1311,26 @@ def api_user_redeem():
     return jsonify({'profile': updated_profile, 'redemption': redemption}), 201
 
 
+@app.route('/api/gtfs/load', methods=['POST'])
+def api_load_gtfs():
+    """Trigger GTFS data loading from a ZIP file."""
+    payload = request.get_json(silent=True) or {}
+    zip_path = payload.get('zipPath') or payload.get('zip_path') or os.getenv('GTFS_ZIP_PATH')
+
+    if not zip_path:
+        return jsonify(error='GTFS zip path is required (zipPath payload or GTFS_ZIP_PATH env)'), 400
+
+    try:
+        summary = load_gtfs(zip_path, orion_client=orion_client)
+        return jsonify(summary.as_dict()), 200
+    except (GTFSValidationError, GTFSLoadError) as exc:
+        return jsonify(error=str(exc)), 400
+    except Exception as exc:
+        logger.exception('GTFS load failed: %s', exc)
+        return jsonify(error='Unexpected error during GTFS load', detail=str(exc)), 500
+
+
+
 if __name__ == '__main__':
     logger.info(f"Starting XDEI Backend on {settings.app.flask_host}:{settings.app.flask_port}")
     # Allow skipping the Orion/QuantumLeap subscription bootstrap for local/dev runs
@@ -1315,6 +1339,23 @@ if __name__ == '__main__':
         logger.info('Skipping VehicleState historical subscription bootstrap (SKIP_SUBSCRIPTION_BOOTSTRAP set)')
     else:
         ensure_vehicle_state_history_subscription()
+
+    # GTFS Bootstrap
+    gtfs_zip = os.getenv('GTFS_ZIP_PATH')
+    if gtfs_zip and not skip_bootstrap:
+        try:
+            logger.info(f"Checking if GTFS data needs to be loaded from {gtfs_zip}...")
+            # Check if we already have some GtfsRoute entities
+            existing_routes = orion_client.get_entities(entity_type='GtfsRoute', limit=1)
+            if not existing_routes:
+                logger.info("No GTFS routes found, starting initial load...")
+                load_gtfs(gtfs_zip, orion_client=orion_client)
+                logger.info("GTFS initial load completed successfully")
+            else:
+                logger.info("GTFS data already exists, skipping initial load")
+        except Exception as exc:
+            logger.warning(f"GTFS bootstrap failed (non-fatal): {exc}")
+
     app.run(
         host=settings.app.flask_host,
         port=settings.app.flask_port,

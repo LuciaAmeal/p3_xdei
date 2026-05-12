@@ -1,15 +1,17 @@
 (function (global) {
-  const DEFAULT_TAB = '3d';
+  const DEFAULT_TAB = 'login';
   const MOBILE_MEDIA_QUERY = '(max-width: 768px)';
 
   const state = {
     activeTab: DEFAULT_TAB,
-    activeView: DEFAULT_TAB,
+    activeView: '2d',
   };
 
   const dom = {
     buttons: [],
     panels: [],
+    menu: null,
+    menuToggle: null,
   };
 
   function isMobile() {
@@ -40,14 +42,21 @@
 
   function updatePanels() {
     const mobile = isMobile();
+    const isMapView = state.activeTab === '2d' || state.activeTab === '3d';
+
     dom.panels.forEach((panel) => {
       const panelName = panel.getAttribute('data-tab-panel');
-      const showOnMobile = panelName === state.activeTab;
 
       if (mobile) {
-        panel.hidden = !showOnMobile;
+        panel.hidden = panelName !== state.activeTab;
       } else {
-        panel.hidden = false;
+        if (panelName === '2d' || panelName === '3d') {
+          // Only show maps if the active tab IS a map view
+          panel.hidden = !isMapView || (panelName !== state.activeView);
+        } else {
+          // Other panels (login, prediction, gamification)
+          panel.hidden = panelName !== state.activeTab;
+        }
       }
     });
   }
@@ -111,13 +120,25 @@
         }
 
         setTab(target);
-
-        const quickMenu = button.closest('details.topbar__quick-menu');
-        if (quickMenu) {
-          quickMenu.open = false;
+        
+        // Always close menu after selection
+        if (dom.menu) {
+          dom.menu.classList.remove('is-open');
         }
       });
     });
+
+    if (dom.menuToggle && dom.menu) {
+      dom.menuToggle.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        dom.menu.classList.toggle('is-open');
+      });
+
+      document.addEventListener('click', function () {
+        dom.menu.classList.remove('is-open');
+      });
+    }
 
     global.addEventListener('resize', function () {
       updatePanels();
@@ -132,6 +153,8 @@
   function init() {
     dom.buttons = getButtons();
     dom.panels = getPanels();
+    dom.menu = document.getElementById('main-menu');
+    dom.menuToggle = document.getElementById('menu-toggle');
 
     if (!dom.buttons.length || !dom.panels.length) {
       return;

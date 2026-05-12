@@ -38,6 +38,7 @@ services:
     environment:
       - IOTA_CB_HOST=orion-ld
       - IOTA_CB_PORT=1026
+      - IOTA_CB_NGSI_VERSION=ld
       - IOTA_NORTH_PORT=4041
       - IOTA_REGISTRY_TYPE=memory
       - IOTA_MQTT_HOST=mosquitto
@@ -45,6 +46,7 @@ services:
       - IOTA_DEFAULT_KEY=1234
       - IOTA_DEFAULT_TRANSPORT=MQTT
       - IOTA_PROVIDER_URL=http://iot-agent-json:4041
+      - IOTA_JSON_LD_CONTEXT=https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld
     ports:
       - "4041:4041"
     depends_on:
@@ -79,6 +81,7 @@ services:
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
       - GF_AUTH_DISABLE_LOGIN_FORM=true
       - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SECURITY_ALLOW_EMBEDDING=true
     volumes:
       - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana
@@ -103,7 +106,9 @@ services:
       - QUANTUMLEAP_HOST=quantumleap
       - FIWARE_SERVICE=smartgondor
       - FIWARE_SERVICEPATH=/gardens
-      - SKIP_SUBSCRIPTION_BOOTSTRAP=1
+      - GTFS_ZIP_PATH=/data/urban_mobility_a_coruna/urban_mobility_a_coruna_gtfs.zip
+    volumes:
+      - ./data:/data:ro
     depends_on:
       orion-ld:
         condition: service_started
@@ -137,6 +142,23 @@ services:
       iot-agent-json:
         condition: service_started
 
+  simulator:
+    build: ./backend
+    image: xdei/backend:stub
+    command: ["python", "dynamic_simulator.py", "/data/urban_mobility_a_coruna/urban_mobility_a_coruna_gtfs.zip"]
+    environment:
+      - MQTT_HOST=mosquitto
+      - MQTT_PORT=1883
+      - FIWARE_SERVICE=smartgondor
+      - FIWARE_SERVICEPATH=/gardens
+    volumes:
+      - ./data:/data:ro
+    depends_on:
+      mosquitto:
+        condition: service_started
+      backend:
+        condition: service_started
+
   quantumleap:
     image: ${QUANTUMLEAP_IMAGE:-orchestracities/quantumleap:1.0.0}
     environment:
@@ -159,7 +181,7 @@ services:
     ports:
       - "8081:80"
     environment:
-      - BACKEND_BASE_URL=http://backend:8000
+      - BACKEND_BASE_URL=http://localhost:8000
 
 volumes:
   mongo_data:
@@ -167,4 +189,3 @@ volumes:
   grafana_data:
   mosquitto_data:
   mosquitto_log:
-  gtfs_feed:

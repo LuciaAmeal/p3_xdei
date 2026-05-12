@@ -29,47 +29,35 @@
       },
       "fieldConfig": {
         "defaults": {
-          "custom": {
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            }
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 60 },
+              { "color": "red", "value": 85 }
+            ]
           },
-          "mappings": [],
           "unit": "%"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 0
-      },
-      "id": 1,
-      "options": {
-        "legend": {
-          "calcs": ["last"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
         }
       },
-      "pluginVersion": "9.4.7",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["mean"], "fields": "", "values": false },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
       "targets": [
         {
-          "format": "time_series",
-          "rawSql": "SELECT $__timeGroupAlias(time_index, '5m') as time, AVG(\"occupancy\") as avg_occupancy FROM \"doc\".\"vehiclestate\" WHERE $__timeFilter(time_index) GROUP BY time ORDER BY time",
+          "format": "table",
+          "rawSql": "SELECT AVG(\"occupancy\") FROM \"doc\".\"mtsmartgondor_gardens_vehiclestate\" WHERE $__timeFilter(\"time_index\")",
           "refId": "A"
         }
       ],
-      "title": "Average Occupancy Over Time",
-      "type": "timeseries"
+      "title": "Ocupación Media Global del Sistema",
+      "type": "gauge"
     },
     {
       "datasource": {
@@ -78,58 +66,83 @@
       },
       "fieldConfig": {
         "defaults": {
-          "custom": {
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            }
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 60 },
+              { "color": "red", "value": 85 }
+            ]
           },
-          "mappings": [],
           "unit": "%"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 0
-      },
-      "id": 2,
-      "options": {
-        "legend": {
-          "calcs": ["last", "max"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
         }
       },
-      "pluginVersion": "9.4.7",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "options": { "orientation": "horizontal", "displayMode": "gradient" },
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT entityid, MAX(\"occupancy\") as max_occupancy, AVG(\"occupancy\") as avg_occupancy FROM \"doc\".\"vehiclestate\" WHERE $__timeFilter(time_index) GROUP BY entityid ORDER BY max_occupancy DESC LIMIT 20",
+          "rawSql": "SELECT destination, AVG(occupancy) as occupancy FROM \"doc\".\"mtsmartgondor_gardens_vehiclestate\" WHERE $__timeFilter(time_index) GROUP BY 1",
           "refId": "A"
         }
       ],
-      "title": "Current Occupancy by Vehicle",
+      "title": "Ocupación por Destino: Universidad vs Hospitales",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "cratedb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "green" }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 3,
+      "options": {
+        "showValue": "always"
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT cast(extract(hour from time_index) as varchar) as hour, AVG(occupancy) as occupancy FROM \"doc\".\"mtsmartgondor_gardens_vehiclestate\" WHERE $__timeFilter(time_index) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Ocupación por Franja Horaria (Peak Hours)",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "cratedb"
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 4,
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT entityid, destination, MAX(occupancy) as max_occ FROM \"doc\".\"mtsmartgondor_gardens_vehiclestate\" WHERE $__timeFilter(time_index) GROUP BY 1, 2 ORDER BY max_occ DESC LIMIT 10",
+          "refId": "A"
+        }
+      ],
+      "title": "Top 10 Vehículos más Ocupados",
       "type": "table"
     }
   ],
   "refresh": "30s",
   "schemaVersion": 38,
-  "style": "dark",
+  "style": "light",
   "tags": ["monitoring", "occupancy"],
   "templating": {
     "list": []
   },
   "time": {
-    "from": "now-1h",
+    "from": "now-24h",
     "to": "now"
   },
   "timepicker": {},

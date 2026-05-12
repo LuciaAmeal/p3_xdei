@@ -64,7 +64,7 @@
       "targets": [
         {
           "format": "time_series",
-          "rawSql": "SELECT $__timeGroupAlias(time_index, '1m') as time, AVG(\"delaysseconds\") as avg_delay FROM \"doc\".\"vehiclestate\" WHERE $__timeFilter(time_index) GROUP BY time ORDER BY time",
+          "rawSql": "SELECT $__timeGroupAlias(\"time_index\", '1m') as time, AVG(\"delayseconds\") as avg_delay FROM \"doc\".\"mtsmartgondor_gardens_vehiclestate\" WHERE $__timeFilter(\"time_index\") GROUP BY time ORDER BY time",
           "refId": "A"
         }
       ],
@@ -113,7 +113,7 @@
       "targets": [
         {
           "format": "time_series",
-          "rawSql": "SELECT $__timeGroupAlias(time_index, '1m') as time, AVG(\"delaysseconds\") as avg_delay FROM \"doc\".\"vehiclestate\" WHERE $__timeFilter(time_index) GROUP BY entityid, time ORDER BY time DESC LIMIT 100",
+          "rawSql": "SELECT $__timeGroupAlias(\"time_index\", '1m') as time, AVG(\"delayseconds\") as avg_delay FROM \"doc\".\"mtsmartgondor_gardens_vehiclestate\" WHERE $__timeFilter(\"time_index\") GROUP BY entityid, time ORDER BY time DESC LIMIT 100",
           "refId": "A"
         }
       ],
@@ -129,7 +129,7 @@
     "list": []
   },
   "time": {
-    "from": "now-1h",
+    "from": "now-24h",
     "to": "now"
   },
   "timepicker": {},

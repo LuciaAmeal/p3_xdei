@@ -1,45 +1,45 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+set -e
 
-echo "Starting Docker Compose stack..."
-docker compose up -d --build
+# Colores para la salida
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m'
 
-echo "Waiting for core services to become available..."
+echo -e "${BLUE}🚀 Iniciando el stack de movilidad urbana...${NC}"
 
-wait_for() {
-  host=$1
-  port=$2
-  name=$3
-  timeout=${4:-60}
-  echo -n "- Waiting for $name at $host:$port... "
-  for i in $(seq 1 $timeout); do
-    if nc -z "$host" "$port" >/dev/null 2>&1; then
-      echo "OK"
-      return 0
-    fi
-    sleep 1
+# Levantar los contenedores
+docker compose up --build -d
+
+echo -e "${BLUE}⏳ Esperando a que los servicios estén listos...${NC}"
+
+# Función para esperar a un servicio
+wait_for_service() {
+  local url=$1
+  local name=$2
+  echo -n "Esperando a $name..."
+  until $(curl --output /dev/null --silent --fail "$url"); do
+    echo -n "."
+    sleep 2
   done
-  echo "TIMEOUT"
-  return 1
+  echo -e " ${GREEN}¡Listo!${NC}"
 }
 
+# Esperar a los servicios clave
+wait_for_service "http://localhost:4200/" "CrateDB"
+wait_for_service "http://localhost:1026/version" "Orion-LD"
+wait_for_service "http://localhost:8000/health" "Backend"
 
-# Wait for the locally published ports exposed by Docker Compose.
-wait_for localhost 1883 Mosquitto 30
+# Pequeña espera adicional para asegurar que CrateDB acepta conexiones SQL
+sleep 5
 
-# MongoDB is required by Orion-LD during startup.
-wait_for localhost 27017 MongoDB 30
+echo -e "${BLUE}🌱 Sembrando datos históricos en CrateDB...${NC}"
+docker compose exec backend python seed_historical_data.py
 
-wait_for localhost 1026 Orion-LD 60
-wait_for localhost 4041 "IoT Agent JSON" 60
-wait_for localhost 4200 CrateDB 60
-wait_for localhost 8668 QuantumLeap 60
-wait_for localhost 3000 Grafana 60
-wait_for localhost 8000 Backend 60
-wait_for localhost 8081 Frontend 60
+echo -e "${BLUE}🚍 Cargando datos estáticos GTFS...${NC}"
+curl -X POST http://localhost:8000/api/gtfs/load
 
-echo "All critical services responded; the stack is ready."
-
-if [[ $# -gt 0 ]]; then
-  exec "$@"
-fi
+echo -e "${GREEN}✅ ¡Sistema inicializado correctamente!${NC}"
+echo -e "Mapa 2D/3D: http://localhost:8081"
+echo -e "Grafana: http://localhost:3000 (Dashboards listos)"
+echo -e "Backend API: http://localhost:8000"

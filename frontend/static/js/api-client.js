@@ -66,13 +66,17 @@
     return searchParams.toString();
   }
 
-  async function fetchJson(path) {
+  async function fetchJson(path, extraHeaders) {
     const base = resolveBackendBaseUrl();
     const url = base ? `${base}${path}` : path;
+    const headers = {
+      Accept: 'application/json',
+    };
+    if (extraHeaders && typeof extraHeaders === 'object') {
+      Object.assign(headers, extraHeaders);
+    }
     const response = await fetch(url, {
-      headers: {
-        Accept: 'application/json',
-      },
+      headers,
     });
 
     if (!response.ok) {
@@ -236,6 +240,107 @@
     };
   }
 
+  async function postJson(path, body) {
+    const base = resolveBackendBaseUrl();
+    const url = base ? `${base}${path}` : path;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      let detail = '';
+      try {
+        const errorBody = await response.json();
+        detail = errorBody.error || errorBody.detail || '';
+      } catch (_ignored) {
+        // ignore parse errors
+      }
+      throw new Error(detail || `Request failed for ${url}: ${response.status}`);
+    }
+
+    return response.json();
+  }
+
+  async function loadGamificationProfile(userId, options) {
+    const settings = options || {};
+    const displayName = settings.displayName || userId;
+    const authHeaders = { 'X-User-Id': userId };
+    // Try to load existing profile; if 404, record a dummy trip to bootstrap it
+    try {
+      return await fetchJson(`/api/user/${encodeURIComponent(userId)}/profile`, authHeaders);
+    } catch (_loadError) {
+      // Profile may not exist yet — create it by recording a trip
+      try {
+        return await postJson('/api/user/record-trip', {
+          userId: userId,
+          displayName: displayName,
+          tripId: 'bootstrap',
+          stopId: '',
+        });
+      } catch (createError) {
+        // If creation also fails, try loading one more time
+        return await fetchJson(`/api/user/${encodeURIComponent(userId)}/profile`, authHeaders);
+      }
+    }
+  }
+
+  function _resolveHeaders(userId) {
+    const headers = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    };
+    if (userId) {
+      headers['X-User-Id'] = userId;
+    }
+    return headers;
+  }
+
+  async function redeemDiscount(options) {
+    const settings = options || {};
+    const base = resolveBackendBaseUrl();
+    const url = base ? `${base}/api/user/redeem` : '/api/user/redeem';
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: _resolveHeaders(settings.userId),
+      body: JSON.stringify({
+        userId: settings.userId,
+        displayName: settings.displayName,
+        discountCode: settings.discountCode,
+        discountValue: settings.discountValue,
+        pointsCost: settings.pointsCost,
+        validUntil: settings.validUntil,
+      }),
+    });
+
+    if (!response.ok) {
+      let detail = '';
+      try {
+        const errorBody = await response.json();
+        detail = errorBody.error || errorBody.detail || '';
+      } catch (_ignored) {
+        // ignore
+      }
+      throw new Error(detail || `Redeem failed: ${response.status}`);
+    }
+
+    return response.json();
+  }
+
+  async function recordTrip(options) {
+    const settings = options || {};
+    return postJson('/api/user/record-trip', {
+      userId: settings.userId,
+      displayName: settings.displayName,
+      tripId: settings.tripId,
+      stopId: settings.stopId,
+    });
+  }
+
   global.MapApiClient = {
     loadMapData,
     loadCurrentVehicles,
@@ -244,5 +349,8 @@
     loadAllVehicleHistory,
     createVehiclePolling,
     createEmptyMapData,
+    loadGamificationProfile,
+    redeemDiscount,
+    recordTrip,
   };
 })(window);

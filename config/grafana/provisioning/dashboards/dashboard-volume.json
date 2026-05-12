@@ -64,7 +64,7 @@
       "targets": [
         {
           "format": "time_series",
-          "rawSql": "SELECT $__timeGroupAlias(time_index, '1h') as time, COUNT(DISTINCT entityid) as trip_volume FROM \"doc\".\"vehiclestate\" WHERE $__timeFilter(time_index) GROUP BY time ORDER BY time",
+          "rawSql": "SELECT $__timeGroupAlias(\"time_index\", '1h') as time, COUNT(DISTINCT entityid) as trip_volume FROM \"doc\".\"mtsmartgondor_gardens_vehiclestate\" WHERE $__timeFilter(\"time_index\") GROUP BY time ORDER BY time",
           "refId": "A"
         }
       ],
@@ -113,7 +113,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT entityid, COUNT(*) as record_count FROM \"doc\".\"vehiclestate\" WHERE $__timeFilter(time_index) GROUP BY entityid ORDER BY record_count DESC LIMIT 20",
+          "rawSql": "SELECT entityid, COUNT(*) as record_count FROM \"doc\".\"mtsmartgondor_gardens_vehiclestate\" WHERE $__timeFilter(\"time_index\") GROUP BY entityid ORDER BY record_count DESC LIMIT 20",
           "refId": "A"
         }
       ],
@@ -129,7 +129,7 @@
     "list": []
   },
   "time": {
-    "from": "now-1h",
+    "from": "now-24h",
     "to": "now"
   },
   "timepicker": {},

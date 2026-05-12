@@ -15,29 +15,62 @@
   </head>
   <body>
     <main id="app-shell">
-      <header id="topbar" class="topbar">
-        <div>
-          <div class="topbar__eyebrow">XDEI P3 · FIWARE Urban Mobility</div>
-          <h1 class="topbar__title">Movilidad urbana en A Coruña</h1>
-          <details class="topbar__quick-menu">
-            <summary class="topbar__quick-summary">Opciones rápidas</summary>
-            <div class="topbar__quick-menu-panel" role="menu" aria-label="Alternar entre vistas y módulos">
-              <button type="button" class="topbar__quick-item" data-tab-target="3d" role="menuitem">Vista 3D</button>
-              <button type="button" class="topbar__quick-item" data-tab-target="2d" role="menuitem">Mapa 2D</button>
-              <button type="button" class="topbar__quick-item" data-tab-target="prediction" role="menuitem">Predicción</button>
-              <button type="button" class="topbar__quick-item" data-tab-target="gamification" role="menuitem">Gamificación</button>
-            </div>
-          </details>
-        </div>
-        <nav class="topbar__tabs" aria-label="Selector de vistas">
-          <button type="button" class="topbar__tab is-active" data-tab-target="3d">Vista 3D</button>
-          <button type="button" class="topbar__tab" data-tab-target="2d">Mapa 2D</button>
+      <div id="main-menu" class="main-menu" hidden>
+        <button id="menu-toggle" class="menu-toggle" aria-label="Abrir menú">
+          <span class="menu-toggle__icon">☰</span>
+        </button>
+        <nav id="menu-dropdown" class="menu-dropdown" aria-label="Navegación principal">
+          <button type="button" class="menu-dropdown__item is-active" data-tab-target="login">
+            <span class="menu-dropdown__icon">🏠</span>
+            <span class="menu-dropdown__label">Inicio / Login</span>
+          </button>
+          <button type="button" class="menu-dropdown__item" data-tab-target="2d">
+            <span class="menu-dropdown__icon">📍</span>
+            <span class="menu-dropdown__label">Mapa 2D</span>
+          </button>
+          <button type="button" class="menu-dropdown__item" data-tab-target="3d">
+            <span class="menu-dropdown__icon">🏙️</span>
+            <span class="menu-dropdown__label">Vista 3D</span>
+          </button>
+          <button type="button" class="menu-dropdown__item" data-tab-target="prediction">
+            <span class="menu-dropdown__icon">📈</span>
+            <span class="menu-dropdown__label">Analítica (Grafana)</span>
+          </button>
+          <button type="button" class="menu-dropdown__item" data-tab-target="gamification">
+            <span class="menu-dropdown__icon">🏆</span>
+            <span class="menu-dropdown__label">Gamificación</span>
+          </button>
         </nav>
-      </header>
+      </div>
 
       <section class="workspace" aria-label="Espacio de trabajo principal">
-        <section class="workspace__panel" data-tab-panel="3d" aria-label="Escena 3D urbana">
-          <section id="hud" aria-label="Estado de la escena 3D">
+        <section id="login-panel" class="workspace__panel login-panel" data-tab-panel="login" aria-label="Acceso al sistema">
+          <div class="login-card">
+            <div class="login-header">
+              <h1 class="login-title">Urban Mobility Platform</h1>
+              <p class="login-subtitle">Inicia sesión para gestionar la movilidad inteligente</p>
+            </div>
+            <form id="login-form" class="login-form">
+              <div class="form-group">
+                <label for="username">Usuario</label>
+                <input type="text" id="username" name="username" placeholder="admin" required>
+              </div>
+              <div class="form-group">
+                <label for="password">Contraseña</label>
+                <input type="password" id="password" name="password" placeholder="••••••••" required>
+              </div>
+              <button type="submit" class="login-submit">Acceder</button>
+              <div id="login-error" class="login-error" hidden>Credenciales incorrectas</div>
+            </form>
+            <div class="login-footer">
+              <button type="button" class="login-secondary" id="btn-guest">Continuar como invitado</button>
+              <button type="button" class="login-secondary" id="btn-create">Crear nuevo usuario</button>
+            </div>
+          </div>
+        </section>
+        <section class="workspace__panel" data-tab-panel="3d" aria-label="Escena 3D urbana" hidden>
+          <section id="hud" class="hud hud--bottom-left" aria-label="Estado de la escena 3D">
+            <button id="hud-close" class="hud-close" type="button" title="Ocultar info">×</button>
             <div class="hud-stack">
               <div class="hud-pill">XDEI P3 · Escena Three.js</div>
               <div id="map-status" class="hud-pill hud-pill--muted">Cargando terreno, edificios y cámara…</div>
@@ -52,8 +85,18 @@
           <div id="scene-root" role="application" aria-label="Escena 3D urbana"></div>
         </section>
 
-        <section class="workspace__panel" data-tab-panel="2d" aria-label="Mapa 2D urbano" hidden>
+        <section class="workspace__panel" data-tab-panel="2d" aria-label="Mapa 2D urbano">
           <div id="map" role="application" aria-label="Mapa Leaflet de A Coruña"></div>
+        </section>
+
+        <section id="prediction-panel" class="workspace__panel prediction-fullscreen" data-tab-panel="prediction" aria-label="Analítica y Predicción" hidden>
+          <div class="prediction-header">
+            <h2 class="prediction-title">Cuadros de mando (Grafana)</h2>
+            <button type="button" class="timeline-button" onclick="window.open('http://localhost:3000', '_blank')">Abrir en pestaña completa ↗</button>
+          </div>
+          <div class="prediction-container">
+            <iframe src="http://localhost:3000/d/occupancy?orgId=1&refresh=10s&kiosk" width="100%" height="100%" frameborder="0"></iframe>
+          </div>
         </section>
       </section>
 
@@ -109,28 +152,6 @@
         </div>
       </section>
 
-      <section id="prediction-panel" class="timeline-panel prediction-panel" data-tab-panel="prediction" aria-label="Predicción de ocupación">
-        <div class="timeline-panel__header">
-          <div>
-            <div class="timeline-panel__eyebrow">Predicción</div>
-            <h2 class="timeline-panel__title">Ocupación prevista</h2>
-          </div>
-          <div class="timeline-panel__status">Consulta rápida</div>
-        </div>
-        <div class="timeline-panel__meta">
-          <span>Resume la previsión de aforo por parada</span>
-          <span>Basado en /api/predict</span>
-        </div>
-        <div class="prediction-panel__body">
-          <div class="detail-panel__note">
-            Abre una parada desde el mapa o usa el backend para calcular predicciones de ocupación.
-          </div>
-          <div class="prediction-panel__actions">
-            <button type="button" class="timeline-button" data-tab-target="2d">Ir al mapa 2D</button>
-            <button type="button" class="timeline-button timeline-button--ghost" data-tab-target="3d">Volver a 3D</button>
-          </div>
-        </div>
-      </section>
 
       <section id="gamification-panel" class="gamification-panel" data-tab-panel="gamification" aria-label="Gamificación">
         <div class="gamification-panel__header">
@@ -161,11 +182,14 @@
     </main>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
-    <script src="static/js/api-client.js?v=20260511a"></script>
-    <script src="static/js/map.js?v=20260511a"></script>
-    <script src="static/js/tab-manager.js?v=20260511a"></script>
-    <script src="static/js/view-switcher.js?v=20260511a"></script>
-    <script src="static/js/gamification-manager.js?v=20260511a"></script>
-    <script type="module" src="static/js/scene3d.js?v=20260511a"></script>
-  </body>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+    <script src="static/js/api-client.js?v=20260511b"></script>
+    <script src="static/js/vehicle-manager.js?v=20260511b"></script>
+    <script src="static/js/replay-controller.js?v=20260511b"></script>
+    <script src="static/js/map.js?v=20260511b"></script>
+    <script src="static/js/tab-manager.js?v=20260511b"></script>
+    <script src="static/js/view-switcher.js?v=20260511b"></script>
+    <script src="static/js/auth.js?v=20260511b"></script>
+    <script src="static/js/gamification-manager.js?v=20260511b"></script>
+    <script type="module" src="static/js/scene3d.js?v=20260511b"></script>  </body>
 </html>

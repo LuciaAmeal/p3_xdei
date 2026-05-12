@@ -61,16 +61,34 @@
 
   function onTabChanged(event) {
     const detail = (event && event.detail) || {};
-    handleViewChange(detail.view || '3d');
+    handleViewChange(detail.view || '2d');
   }
 
   function onViewChanged(event) {
     const detail = (event && event.detail) || {};
-    handleViewChange(detail.view || '3d');
+    handleViewChange(detail.view || '2d');
+  }
+
+  function initHud() {
+    const hud = document.getElementById('hud');
+    const hudClose = document.getElementById('hud-close');
+    if (hud && hudClose) {
+      hudClose.addEventListener('click', function() {
+        hud.classList.add('is-hidden');
+      });
+    }
   }
 
   function init() {
-    init3D();
+    const activeView = document.body.getAttribute('data-active-view') || '2d';
+    
+    if (activeView === '2d') {
+      init2D();
+    } else if (activeView === '3d') {
+      init3D();
+    }
+
+    initHud();
 
     global.addEventListener('xdei:tab-changed', onTabChanged);
     global.addEventListener('xdei:view-changed', onViewChanged);
