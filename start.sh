@@ -39,6 +39,9 @@ docker compose exec backend python seed_historical_data.py
 echo -e "${BLUE}🚍 Cargando datos estáticos GTFS...${NC}"
 curl -X POST http://localhost:8000/api/gtfs/load
 
+echo -e "${BLUE}🎮 Sembrando datos de gamificación...${NC}"
+docker compose exec backend python seed_gamification.py
+
 echo -e "${GREEN}✅ ¡Sistema inicializado correctamente!${NC}"
 echo -e "Mapa 2D/3D: http://localhost:8081"
 echo -e "Grafana: http://localhost:3000 (Dashboards listos)"

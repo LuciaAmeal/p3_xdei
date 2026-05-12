@@ -124,10 +124,13 @@ class OrionClient:
             raise OrionConnectionError(f"Connection failed: {e}") from e
         except requests.exceptions.HTTPError as e:
             error_response = getattr(e, "response", None) or response
-            if error_response is not None and error_response.status_code == 404:
-                raise OrionClientNotFound(f"Entity not found: {error_response.text}") from e
             if error_response is not None:
-                logger.error(f"HTTP error {error_response.status_code}: {error_response.text}")
+                if error_response.status_code == 404:
+                    raise OrionClientNotFound(f"Entity not found: {error_response.text}") from e
+                if error_response.status_code == 400:
+                    logger.error(f"Orion 400 Bad Request. Path: {path}, Payload: {kwargs.get('json')}, Response: {error_response.text}")
+                else:
+                    logger.error(f"HTTP error {error_response.status_code}: {error_response.text}")
             raise
     
     def get_entities(

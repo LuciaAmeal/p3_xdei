@@ -153,19 +153,21 @@
       </section>
 
 
-      <section id="gamification-panel" class="gamification-panel" data-tab-panel="gamification" aria-label="Gamificación">
+      <section id="gamification-panel" class="gamification-panel is-fullscreen" data-tab-panel="gamification" aria-label="Gamificación">
         <div class="gamification-panel__header">
-          <div>
-            <div class="gamification-panel__eyebrow">Gamificación</div>
-            <h2 class="gamification-panel__title">Puntos y logros</h2>
+          <div class="gamification-header-content">
+            <div class="gamification-panel__eyebrow">Misión Sostenible</div>
+            <h2 class="gamification-panel__title">Tu Ciudad, Tus Logros</h2>
           </div>
-          <div id="gamification-status" class="gamification-panel__status">Listo</div>
+          <div class="gamification-header-actions">
+            <div id="gamification-status" class="gamification-panel__status">Sincronizado</div>
+            <button class="gamification-close-btn" onclick="document.querySelector('[data-tab-target=\'2d\']').click()" aria-label="Cerrar">
+              <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+            </button>
+          </div>
         </div>
         <div id="gamification-panel-body" class="gamification-panel__body">
-          <section class="gamification-section gamification-empty">
-            <h3 class="gamification-section__title">Carga tu perfil</h3>
-            <p class="gamification-empty__text">Introduce un usuario para ver sus puntos, logros y canjes disponibles.</p>
-          </section>
+          <!-- Dynamic content will be injected here -->
         </div>
       </section>
 

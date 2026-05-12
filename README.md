@@ -12,58 +12,23 @@ Este README es la guia principal de arranque y uso local. Para detalle funcional
 ### Requisitos
 
 - Docker + Docker Compose plugin (`docker compose`)
-- Python 3.10+ (solo para scripts locales fuera de contenedores)
+- Navegador moderno (Chrome/Firefox) para visualización 3D
 
-### 1) Clonar y entrar al repo
+### 🚀 Arranque en un solo paso (Recomendado)
 
-```bash
-git clone <repo-url>
-cd p3_xdei
-```
-
-### 2) Arranque recomendado cuando todo está apagado
+El script `start.sh` automatiza todo el proceso: levanta contenedores, verifica la salud de los servicios, **siembra 7 días de datos históricos** en CrateDB e ingiere los datos estáticos GTFS.
 
 ```bash
-./start.sh
+bash start.sh
 ```
 
-Si todo está apagado y cerrado, este es el flujo recomendado:
+### Acceso a la Plataforma
 
-1. Abrir una terminal en la raíz del repositorio.
-2. Asegurarse de que Docker y Docker Compose estén en ejecución.
-3. Ejecutar `bash start.sh`.
-4. Esperar a que el script termine con el mensaje de que la pila está lista.
-
-### 3) Parada ordenada
-
-```bash
-docker compose down
-```
-
-### 4) Levantar stack completo manualmente
-
-```bash
-# Compatibilidad: tambien sirve `docker-compose up --build -d`
-docker compose up --build -d
-```
-
-### 5) Comprobar salud
-
-```bash
-curl http://localhost:8000/health
-```
-
-Respuesta esperada: JSON con `status` y estado por servicio FIWARE.
-
-### 6) Abrir interfaces
-
-- Frontend: http://localhost:8081
-- Backend API: http://localhost:8000
-- Orion-LD: http://localhost:1026
-- IoT Agent JSON: http://localhost:4041
-- QuantumLeap: http://localhost:8668
-- CrateDB admin: http://localhost:4200
-- Grafana: http://localhost:3000
+1. **Frontend**: [http://localhost:8081](http://localhost:8081)
+   - **Login**: Credenciales por defecto `admin` / `admin`.
+   - El acceso al resto de la app está restringido hasta iniciar sesión.
+2. **Dashboard Analítico**: Integrado en la sección de "Predicción / Analítica" del menú lateral.
+3. **API Backend**: [http://localhost:1026/v2](http://localhost:1026/v2) (Orion) | [http://localhost:8000](http://localhost:8000) (Custom API).
 
 ### Servicios y puertos
 
@@ -76,34 +41,32 @@ Respuesta esperada: JSON con `status` y estado por servicio FIWARE.
 - Backend Flask: `8000`
 - Frontend Nginx: `8081`
 
-### Arranque recomendado para datos de demo
+## Características Principales
 
-```bash
-# 1) Stack
+### 🔐 Seguridad y Autenticación
+*   **Landing Page**: Nueva interfaz de inicio con diseño premium (glassmorphism).
+*   **Control de Acceso**: Menú de navegación persistente (hamburguesa) que se activa tras el login exitoso.
 
-docker compose up --build -d
+### 🗺️ Visualización Avanzada
+*   **Mapa 2D**: Monitorización en tiempo real de la flota sobre Leaflet.
+*   **Escena 3D**: Visualización inmersiva con Three.js y HUD informativo (descartable).
+*   **Analítica**: Cuadro de mando integrado con 4 paneles clave:
+    *   **Ocupación Media Global**: Indicador tipo Gauge con umbrales de estado.
+    *   **Universidad vs Hospitales**: Comparativa de demanda por destino principal.
+    *   **Peak Hours**: Análisis de franjas horarias críticas.
+    *   **Top 10 Vehículos**: Ranking de unidades con mayor saturación.
 
-# 2) Cargar GTFS (primero validar y luego cargar)
-python backend/validate_gtfs.py /ruta/feed.zip
-python backend/load_gtfs.py /ruta/feed.zip --batch-size 100
-
-# 3) (Opcional) Sembrar gamificacion
-python scripts/seed_gamification.py --user-count 8
-
-# 4) Simular telemetria
-python backend/dynamic_simulator.py --gtfs-zip /ruta/feed.zip
-```
+### ⚙️ Automatización y DevOps
+*   **Sembrado Inteligente**: Generación automática de 7 días de telemetría sintética al arrancar.
+*   **Orquestación**: Gestión de dependencias y salud de servicios (Orion-LD, CrateDB, QuantumLeap) integrada en el arranque.
 
 ## Arquitectura
 
-El sistema sigue una arquitectura FIWARE en capas:
-- Capa GTFS estatico (`load_gtfs.py` + Orion-LD)
-- Capa dinamica (simulador + MQTT)
-- Ingesta operativa (IoT Agent JSON -> Orion-LD)
-- Historico temporal (QuantumLeap -> CrateDB)
-- API de aplicacion (Flask)
-- Frontend (Leaflet, Three.js)
-- Observabilidad (Grafana)
+El sistema sigue una arquitectura FIWARE de vanguardia:
+- **Capa Estática**: Ingesta GTFS a Orion-LD.
+- **Capa Dinámica**: Simulador de vehículos vía MQTT (IoT Agent).
+- **Persistencia**: QuantumLeap almacenando en CrateDB (Postgres compatible).
+- **Análisis**: Grafana con tema esmeralda y light-mode optimizado.
 
 ```mermaid
 flowchart LR

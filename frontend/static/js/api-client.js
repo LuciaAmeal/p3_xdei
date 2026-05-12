@@ -112,6 +112,10 @@
     return Array.isArray(vehiclesResponse.vehicles) ? vehiclesResponse.vehicles : [];
   }
 
+  async function loadStops() {
+    return fetchJson('/api/stops');
+  }
+
   async function loadStopPredictionSeries(stopId, options) {
     const settings = options || {};
     const query = buildQueryString({
@@ -347,6 +351,7 @@
     loadStopPredictionSeries,
     loadVehicleHistory,
     loadAllVehicleHistory,
+    loadStops,
     createVehiclePolling,
     createEmptyMapData,
     loadGamificationProfile,

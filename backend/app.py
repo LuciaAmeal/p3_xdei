@@ -672,7 +672,8 @@ def _authenticated_user_id() -> Optional[str]:
     # Try X-User-Id header first (backward compatibility)
     user_id = request.headers.get('X-User-Id')
     if user_id:
-        return user_id.strip() or None
+        user_id = user_id.strip()
+        return user_id if user_id else None
 
     # Try Bearer token (JWT)
     authorization = request.headers.get('Authorization', '').strip()
@@ -732,8 +733,10 @@ def _profile_from_entity(entity: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _base_profile_payload(user_id: str, display_name: Optional[str] = None) -> Dict[str, Any]:
+    if not user_id:
+        raise ValueError("Cannot create profile without user_id")
     resolved_display_name = (display_name or user_id).strip() or user_id
-    return {
+    payload = {
         'id': _user_profile_entity_id(user_id),
         'type': 'UserProfile',
         '@context': NGSI_LD_CONTEXT,
@@ -741,14 +744,14 @@ def _base_profile_payload(user_id: str, display_name: Optional[str] = None) -> D
         'totalPoints': _ngsi_property(0),
         'visitedStops': _ngsi_property([]),
         'achievements': _ngsi_property([]),
-        'lastActivityAt': _ngsi_property(None),
         'redeemedDiscounts': _ngsi_property([]),
     }
+    return payload
 
 
 def _build_profile_entity(profile: Dict[str, Any]) -> Dict[str, Any]:
     user_id = profile.get('userId') or ''
-    return {
+    entity = {
         'id': _user_profile_entity_id(user_id),
         'type': 'UserProfile',
         '@context': NGSI_LD_CONTEXT,
@@ -756,26 +759,60 @@ def _build_profile_entity(profile: Dict[str, Any]) -> Dict[str, Any]:
         'totalPoints': _ngsi_property(int(profile.get('totalPoints', 0) or 0)),
         'visitedStops': _ngsi_property(list(profile.get('visitedStops') or [])),
         'achievements': _ngsi_property(list(profile.get('achievements') or [])),
-        'lastActivityAt': _ngsi_property(profile.get('lastActivityAt')),
         'redeemedDiscounts': _ngsi_property(list(profile.get('redeemedDiscounts') or [])),
     }
+    
+    last_activity = profile.get('lastActivityAt')
+    if last_activity:
+        entity['lastActivityAt'] = _ngsi_property(last_activity)
+        
+    return entity
 
 
 def _compute_gamification_achievements(total_points: int, visited_stops: List[str]) -> List[str]:
     achievements = []
-    if total_points >= GAMIFICATION_TRIP_POINTS:
+    if total_points >= 10:
         achievements.append('first_trip')
-    for minimum_visits, achievement_id in GAMIFICATION_ACHIEVEMENT_RULES[1:]:
-        if len(visited_stops) >= minimum_visits:
-            achievements.append(achievement_id)
+    if len(visited_stops) >= 3:
+        achievements.append('explorer_3')
+    if len(visited_stops) >= 6:
+        achievements.append('explorer_6')
+    
+    # Zone achievements
+    centro_stops = ['urn:ngsi-ld:GtfsStop:s1', 'urn:ngsi-ld:GtfsStop:s2']
+    puerto_stops = ['urn:ngsi-ld:GtfsStop:s3', 'urn:ngsi-ld:GtfsStop:s4']
+    riazor_stops = ['urn:ngsi-ld:GtfsStop:s5', 'urn:ngsi-ld:GtfsStop:s6']
+    
+    if all(s in visited_stops for s in centro_stops):
+        achievements.append('zone_centro')
+    if all(s in visited_stops for s in puerto_stops):
+        achievements.append('zone_puerto')
+    if all(s in visited_stops for s in riazor_stops):
+        achievements.append('zone_riazor')
+        
+    if total_points >= 500:
+        achievements.append('points_500')
+        
     return list(dict.fromkeys(achievements))
 
 
 def _load_user_profile(user_id: str) -> Dict[str, Any]:
     entity = orion_client.get_entity(_user_profile_entity_id(user_id))
-    if not isinstance(entity, dict):
-        raise OrionClientError('Invalid UserProfile payload')
-    return entity
+    
+    def _ensure_list(val):
+        if val is None: return []
+        if isinstance(val, list): return val
+        return [val]
+
+    return {
+        'userId': user_id,
+        'displayName': entity.get('displayName', {}).get('value'),
+        'totalPoints': int(entity.get('totalPoints', {}).get('value', 0) or 0),
+        'visitedStops': _ensure_list(entity.get('visitedStops', {}).get('value')),
+        'achievements': _ensure_list(entity.get('achievements', {}).get('value')),
+        'redeemedDiscounts': _ensure_list(entity.get('redeemedDiscounts', {}).get('value')),
+        'lastActivityAt': entity.get('lastActivityAt', {}).get('value'),
+    }
 
 
 def _ensure_user_profile(user_id: str, display_name: Optional[str] = None) -> Dict[str, Any]:
@@ -784,15 +821,20 @@ def _ensure_user_profile(user_id: str, display_name: Optional[str] = None) -> Di
     except OrionClientNotFound:
         entity = _base_profile_payload(user_id, display_name=display_name)
         orion_client.create_entity(entity)
-        return entity
+        return _profile_from_entity(entity)
 
 
 def _save_user_profile(profile: Dict[str, Any]) -> None:
     entity = _build_profile_entity(profile)
     try:
+        # Include @context in the update payload as required by Orion-LD for application/ld+json
+        update_payload = {key: value for key, value in entity.items() if key not in {'id', 'type'}}
+        if '@context' not in update_payload:
+            update_payload['@context'] = entity.get('@context') or NGSI_LD_CONTEXT
+            
         orion_client.update_entity(
             entity['id'],
-            {key: value for key, value in entity.items() if key not in {'id', 'type', '@context'}},
+            update_payload,
         )
     except OrionClientNotFound:
         orion_client.create_entity(entity)
@@ -838,14 +880,19 @@ def _resolve_request_user_id(expected_user_id: Optional[str] = None) -> str:
 def _update_profile_after_trip(profile: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str, Any]:
     visited_stops = list(profile.get('visitedStops') or [])
     stop_id = payload.get('stopId') or payload.get('stop_id') or payload.get('stop')
+    
+    # Calculate points
+    override = payload.get('pointsOverride')
+    points_to_add = int(override) if override is not None else GAMIFICATION_TRIP_POINTS
+    
     bonus_points = 0
-
     if isinstance(stop_id, str) and stop_id:
         if stop_id not in visited_stops:
             visited_stops.append(stop_id)
-            bonus_points = GAMIFICATION_NEW_STOP_BONUS
+            if override is None:
+                bonus_points = GAMIFICATION_NEW_STOP_BONUS
 
-    total_points = int(profile.get('totalPoints', 0) or 0) + GAMIFICATION_TRIP_POINTS + bonus_points
+    total_points = int(profile.get('totalPoints', 0) or 0) + points_to_add + bonus_points
     updated_profile = dict(profile)
     updated_profile['visitedStops'] = visited_stops
     updated_profile['totalPoints'] = total_points
@@ -1215,7 +1262,7 @@ def api_user_profile(user_id: str):
         logger.warning('Unable to load user profile: %s', exc)
         return jsonify(error='Unable to load user profile', detail=str(exc)), 502
 
-    return jsonify(_profile_from_entity(entity)), 200
+    return jsonify(entity), 200
 
 
 @app.route('/api/user/record-trip', methods=['POST'])
@@ -1230,11 +1277,10 @@ def api_user_record_trip():
     try:
         request_user_id = _resolve_request_user_id(payload.get('userId') or payload.get('user_id'))
         display_name = request.headers.get('X-User-Name') or payload.get('displayName')
-        profile_entity = _ensure_user_profile(
+        profile = _ensure_user_profile(
             request_user_id,
             display_name=display_name if isinstance(display_name, str) else None,
         )
-        profile = _profile_from_entity(profile_entity)
         updated_profile = _update_profile_after_trip(profile, payload)
         _save_user_profile(updated_profile)
     except PermissionError as exc:
